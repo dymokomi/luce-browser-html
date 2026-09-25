@@ -87,8 +87,8 @@ Web::HTML::HTMLTokenizer::skip	luce-browser-html	html_syntax	html_tokenizer_skip
 Web::HTML::HTMLTokenizer::source	luce-browser-html	html_syntax	html_tokenizer_source	Libraries/LibWeb/HTML/Parser/HTMLTokenizer.h:134	stub
 Web::HTML::HTMLTokenizer::state_name	luce-browser-html	html_syntax	html_tokenizer_state_name	Libraries/LibWeb/HTML/Parser/HTMLTokenizer.h:177	stub
 Web::HTML::HTMLTokenizer::store_old_insertion_point	luce-browser-html	html_syntax	html_tokenizer_store_old_insertion_point	Libraries/LibWeb/HTML/Parser/HTMLTokenizer.h:148	stub
-Web::HTML::HTMLTokenizer::switch_to	luce-browser-html	html_syntax	html_tokenizer_switch_to	Libraries/LibWeb/HTML/Parser/HTMLTokenizer.cpp:3018	stub
-Web::HTML::HTMLTokenizer::switch_to	luce-browser-html	html_syntax	html_tokenizer_switch_to_2	Libraries/LibWeb/HTML/Parser/HTMLTokenizer.h:126	stub
+Web::HTML::HTMLTokenizer::switch_to	luce-browser-html	html_syntax	html_tokenizer_switch_to_html_parser	Libraries/LibWeb/HTML/Parser/HTMLTokenizer.cpp:3018	stub
+Web::HTML::HTMLTokenizer::switch_to	luce-browser-html	html_syntax	html_tokenizer_switch_to_html_tokenizer_state	Libraries/LibWeb/HTML/Parser/HTMLTokenizer.h:126	stub
 Web::HTML::HTMLTokenizer::undefine_insertion_point	luce-browser-html	html_syntax	html_tokenizer_undefine_insertion_point	Libraries/LibWeb/HTML/Parser/HTMLTokenizer.h:147	stub
 Web::HTML::HTMLTokenizer::unparsed_input	luce-browser-html	html_syntax	html_tokenizer_unparsed_input	Libraries/LibWeb/HTML/Parser/HTMLTokenizer.cpp:2950	stub
 Web::HTML::HTMLTokenizer::update_insertion_point	luce-browser-html	html_syntax	html_tokenizer_update_insertion_point	Libraries/LibWeb/HTML/Parser/HTMLTokenizer.h:150	stub

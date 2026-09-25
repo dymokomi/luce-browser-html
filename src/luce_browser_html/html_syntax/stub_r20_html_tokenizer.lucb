@@ -253,11 +253,11 @@ pub func html_tokenizer_next_token(this: HtmlTokenizer*, stop_at_insertion_point
     trap("unported: Web::HTML::HTMLTokenizer::next_token")
 
 ## Ported from Libraries/LibWeb/HTML/Parser/HTMLTokenizer.cpp:3018 Web::HTML::HTMLTokenizer::switch_to.
-pub func html_tokenizer_switch_to(this: HtmlTokenizer*, new_state: HtmlTokenizerState):
+pub func html_tokenizer_switch_to_html_parser(this: HtmlTokenizer*, new_state: HtmlTokenizerState):
     trap("unported: Web::HTML::HTMLTokenizer::switch_to")
 
 ## Ported from Libraries/LibWeb/HTML/Parser/HTMLTokenizer.h:126 Web::HTML::HTMLTokenizer::switch_to.
-pub func html_tokenizer_switch_to_2(this: HtmlTokenizer*, new_state: HtmlTokenizerState):
+pub func html_tokenizer_switch_to_html_tokenizer_state(this: HtmlTokenizer*, new_state: HtmlTokenizerState):
     trap("unported: Web::HTML::HTMLTokenizer::switch_to")
 
 ## Ported from Libraries/LibWeb/HTML/Parser/HTMLTokenizer.h:131 Web::HTML::HTMLTokenizer::set_blocked.
