@@ -1,0 +1,2 @@
+# region	name	package	module	donor lines	functions	files
+r20	html_tokenizer	luce-browser-html	html_syntax	10272	97	Build/Libraries/LibWeb/HTML/Parser/NamedCharacterReferences Libraries/LibWeb/HTML/Parser/Entities Libraries/LibWeb/HTML/Parser/HTMLToken Libraries/LibWeb/HTML/Parser/HTMLTokenizer

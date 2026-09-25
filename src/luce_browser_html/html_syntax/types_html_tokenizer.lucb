@@ -1,0 +1,133 @@
+#==============================================================================================
+#
+#   types_html_tokenizer - declarations of Libraries/LibWeb/HTML/Parser/HTMLTokenizer.h
+#
+#   DESCRIPTION:
+#       Structs, enums, vtables, class information and cast helpers generated from
+#       Libraries/LibWeb/HTML/Parser/HTMLTokenizer.h (Ladybird 47c82b38d0) by the skeleton
+#       generator (DESIGN.md §4.4). Regenerate rather than edit, except to fill a field the
+#       generator could not map.
+#
+#==============================================================================================
+
+# mark: HtmlTokenizer ===========================================================================
+
+## Web::HTML::HTMLTokenizer (Libraries/LibWeb/HTML/Parser/HTMLTokenizer.h:106).
+pub struct HtmlTokenizer:
+    pub var m_adjusted_current_node_is_foreign: (func(void*) -> bool)?  # retyped (DESIGN.md §4.1.3): GC::Ptr<Web::HTML::HTMLParser> m_parser
+    pub var m_parser_context: void*?  # retyped (DESIGN.md §4.1.3): GC::Ptr<Web::HTML::HTMLParser> m_parser
+    pub var m_state: HtmlTokenizerState  # C++ default: { State :: Data }
+    pub var m_return_state: HtmlTokenizerState  # C++ default: { State :: Data }
+    pub var m_temporary_buffer: ak.Vector[u32]
+    pub var m_source: ak.String
+    pub var m_decoded_input: ak.Vector[u32]
+    pub var m_insertion_point: i64?
+    pub var m_old_insertion_points: ak.Vector[i64?]
+    pub var m_current_offset: isize  # C++ default: { 0 }
+    pub var m_prev_offset: isize  # C++ default: { 0 }
+    pub var m_current_token: HtmlToken
+    pub var m_current_builder: ak.StringBuilder
+    pub var m_named_character_reference_matcher: NamedCharacterReferenceMatcher
+    pub var m_last_emitted_start_tag_name: ak.FlyString?
+    pub var m_explicit_eof_inserted: bool  # C++ default: { false }
+    pub var m_input_stream_closed: bool  # C++ default: { false }
+    pub var m_has_emitted_eof: bool  # C++ default: { false }
+    pub var m_queued_tokens: ak.Queue[HtmlToken]
+    pub var m_character_reference_code: u32  # C++ default: { 0 }
+    pub var m_blocked: bool  # C++ default: { false }
+    pub var m_aborted: bool  # C++ default: { false }
+    pub var m_source_positions: ak.Vector[HtmlTokenPosition]
+
+## Web::HTML::HTMLTokenizer::State (Libraries/LibWeb/HTML/Parser/HTMLTokenizer.h:111).
+pub enum HtmlTokenizerState as i32:
+    data = 0
+    rcdata = 1
+    rawtext = 2
+    script_data = 3
+    plaintext = 4
+    tag_open = 5
+    end_tag_open = 6
+    tag_name = 7
+    rcdata_less_than_sign = 8
+    rcdata_end_tag_open = 9
+    rcdata_end_tag_name = 10
+    rawtext_less_than_sign = 11
+    rawtext_end_tag_open = 12
+    rawtext_end_tag_name = 13
+    script_data_less_than_sign = 14
+    script_data_end_tag_open = 15
+    script_data_end_tag_name = 16
+    script_data_escape_start = 17
+    script_data_escape_start_dash = 18
+    script_data_escaped = 19
+    script_data_escaped_dash = 20
+    script_data_escaped_dash_dash = 21
+    script_data_escaped_less_than_sign = 22
+    script_data_escaped_end_tag_open = 23
+    script_data_escaped_end_tag_name = 24
+    script_data_double_escape_start = 25
+    script_data_double_escaped = 26
+    script_data_double_escaped_dash = 27
+    script_data_double_escaped_dash_dash = 28
+    script_data_double_escaped_less_than_sign = 29
+    script_data_double_escape_end = 30
+    before_attribute_name = 31
+    attribute_name = 32
+    after_attribute_name = 33
+    before_attribute_value = 34
+    attribute_value_double_quoted = 35
+    attribute_value_single_quoted = 36
+    attribute_value_unquoted = 37
+    after_attribute_value_quoted = 38
+    self_closing_start_tag = 39
+    bogus_comment = 40
+    markup_declaration_open = 41
+    comment_start = 42
+    comment_start_dash = 43
+    comment = 44
+    comment_less_than_sign = 45
+    comment_less_than_sign_bang = 46
+    comment_less_than_sign_bang_dash = 47
+    comment_less_than_sign_bang_dash_dash = 48
+    comment_end_dash = 49
+    comment_end = 50
+    comment_end_bang = 51
+    doctype = 52
+    before_doctype_name = 53
+    doctype_name = 54
+    after_doctype_name = 55
+    after_doctype_public_keyword = 56
+    before_doctype_public_identifier = 57
+    doctype_public_identifier_double_quoted = 58
+    doctype_public_identifier_single_quoted = 59
+    after_doctype_public_identifier = 60
+    between_doctype_public_and_system_identifiers = 61
+    after_doctype_system_keyword = 62
+    before_doctype_system_identifier = 63
+    doctype_system_identifier_double_quoted = 64
+    doctype_system_identifier_single_quoted = 65
+    after_doctype_system_identifier = 66
+    bogus_doctype = 67
+    cdata_section = 68
+    cdata_section_bracket = 69
+    cdata_section_end = 70
+    character_reference = 71
+    named_character_reference = 72
+    ambiguous_ampersand = 73
+    numeric_character_reference = 74
+    hexadecimal_character_reference_start = 75
+    decimal_character_reference_start = 76
+    hexadecimal_character_reference = 77
+    decimal_character_reference = 78
+    numeric_character_reference_end = 79
+
+## Web::HTML::HTMLTokenizer::StopAtInsertionPoint (Libraries/LibWeb/HTML/Parser/HTMLTokenizer.h:117).
+pub enum HtmlTokenizerStopAtInsertionPoint as i32:
+    no = 0
+    yes = 1
+
+## Web::HTML::HTMLTokenizer::ConsumeNextResult (Libraries/LibWeb/HTML/Parser/HTMLTokenizer.h:164).
+pub enum HtmlTokenizerConsumeNextResult as i32:
+    consumed = 0
+    not_consumed = 1
+    ran_out_of_characters = 2

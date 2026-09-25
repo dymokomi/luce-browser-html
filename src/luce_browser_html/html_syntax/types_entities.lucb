@@ -1,0 +1,35 @@
+#==============================================================================================
+#
+#   types_entities - declarations of Libraries/LibWeb/HTML/Parser/Entities.h
+#
+#   DESCRIPTION:
+#       Structs, enums, vtables, class information and cast helpers generated from
+#       Libraries/LibWeb/HTML/Parser/Entities.h (Ladybird 47c82b38d0) by the skeleton
+#       generator (DESIGN.md §4.4). Regenerate rather than edit, except to fill a field the
+#       generator could not map.
+#
+#==============================================================================================
+
+# mark: NamedCharacterReferenceMatcher ==========================================================
+
+## Web::HTML::NamedCharacterReferenceMatcher (Libraries/LibWeb/HTML/Parser/Entities.h:15).
+pub struct NamedCharacterReferenceMatcher:
+    pub var m_search_state_tag: NamedCharacterReferenceMatcherSearchStateTag  # C++ default: { SearchStateTag :: Init }
+    pub var m_search_state: NamedCharacterReferenceMatcherSearchState  # C++ default: { { 0 , 0 } }
+    pub var m_last_matched_unique_index: u16  # C++ default: { 0 }
+    pub var m_pending_unique_index: u16  # C++ default: { 0 }
+    pub var m_overconsumed_code_points: u8  # C++ default: { 0 }
+    pub var m_ends_with_semicolon: bool  # C++ default: { false }
+
+## Web::HTML::NamedCharacterReferenceMatcher::SearchStateTag (Libraries/LibWeb/HTML/Parser/Entities.h:42).
+pub enum NamedCharacterReferenceMatcherSearchStateTag as u8:
+    init = 0
+    first_to_second_layer = 1
+    dafsa_children = 2
+
+# mark: NamedCharacterReferenceMatcherSearchState ===============================================
+
+## Web::HTML::NamedCharacterReferenceMatcher::SearchState (Libraries/LibWeb/HTML/Parser/Entities.h:47).
+pub union NamedCharacterReferenceMatcherSearchState:
+    pub first_to_second_layer: NamedCharacterReferenceFirstToSecondLayerLink
+    pub dafsa_children: const NamedCharacterReferenceNode[]

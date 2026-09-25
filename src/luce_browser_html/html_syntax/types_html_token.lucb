@@ -1,0 +1,50 @@
+#==============================================================================================
+#
+#   types_html_token - declarations of Libraries/LibWeb/HTML/Parser/HTMLToken.h
+#
+#   DESCRIPTION:
+#       Structs, enums, vtables, class information and cast helpers generated from
+#       Libraries/LibWeb/HTML/Parser/HTMLToken.h (Ladybird 47c82b38d0) by the skeleton
+#       generator (DESIGN.md §4.4). Regenerate rather than edit, except to fill a field the
+#       generator could not map.
+#
+#==============================================================================================
+
+# mark: HtmlToken ===============================================================================
+
+## Web::HTML::HTMLToken (Libraries/LibWeb/HTML/Parser/HTMLToken.h:22).
+pub struct HtmlToken:
+    pub var m_type: HtmlTokenType  # C++ default: { Type :: Invalid }
+    pub var m_tag_self_closing: bool  # C++ default: { false }
+    pub var m_tag_self_closing_acknowledged: bool  # C++ default: { false }
+    pub var m_had_duplicate_attribute: bool  # C++ default: { false }
+    pub var m_string_data: ak.FlyString
+    pub var m_comment_data: ak.String
+    pub var m_data: EmptyOrU32OrHtmlTokenDoctypeDataOrVectorHtmlTokenAttribute
+    pub var m_start_position: HtmlTokenPosition
+    pub var m_end_position: HtmlTokenPosition
+
+## Web::HTML::HTMLToken::Type (Libraries/LibWeb/HTML/Parser/HTMLToken.h:27).
+pub enum HtmlTokenType as u8:
+    invalid = 0
+    doctype = 1
+    start_tag = 2
+    end_tag = 3
+    comment = 4
+    character = 5
+    end_of_file = 6
+
+# mark: HtmlTokenPosition =======================================================================
+
+## Web::HTML::HTMLToken::Position (Libraries/LibWeb/HTML/Parser/HTMLToken.h:37).
+pub struct HtmlTokenPosition:
+    pub var line: usize  # C++ default: { 0 }
+    pub var column: usize  # C++ default: { 0 }
+
+## Web::HTML::HTMLToken::Attribute (Libraries/LibWeb/HTML/Parser/HTMLToken.h:42): opaque in this phase (not in the phase-1 closure).
+pub struct HtmlTokenAttribute:
+    pub var opaque_: u8
+
+## Web::HTML::HTMLToken::DoctypeData (Libraries/LibWeb/HTML/Parser/HTMLToken.h:53): opaque in this phase (not in the phase-1 closure).
+pub struct HtmlTokenDoctypeData:
+    pub var opaque_: u8

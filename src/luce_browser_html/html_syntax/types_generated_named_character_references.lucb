@@ -1,0 +1,74 @@
+#==============================================================================================
+#
+#   types_generated_named_character_references - declarations of Build/Libraries/LibWeb/HTML/Parser/NamedCharacterReferences.h
+#
+#   DESCRIPTION:
+#       Structs, enums, vtables, class information and cast helpers generated from
+#       Build/Libraries/LibWeb/HTML/Parser/NamedCharacterReferences.h (Ladybird 47c82b38d0) by
+#       the skeleton generator (DESIGN.md §4.4). Regenerate rather than edit, except to fill a
+#       field the generator could not map.
+#
+#==============================================================================================
+
+## Web::HTML::NamedCharacterReferenceSecondCodepoint (Build/Libraries/LibWeb/HTML/Parser/NamedCharacterReferences.h:10).
+pub enum NamedCharacterReferenceSecondCodepoint as u32:
+    none_ = 0
+    combining_long_solidus_overlay = 1
+    combining_long_vertical_line_overlay = 2
+    hair_space = 3
+    combining_double_low_line = 4
+    combining_reverse_solidus_overlay = 5
+    variation_selector1 = 6
+    latin_small_letter_j = 7
+    combining_macron_below = 8
+
+# mark: NamedCharacterReferenceCodepoints =======================================================
+
+## Web::HTML::NamedCharacterReferenceCodepoints (Build/Libraries/LibWeb/HTML/Parser/NamedCharacterReferences.h:51).
+pub struct NamedCharacterReferenceCodepoints:
+    pub var first: u32  # bit-field : 24
+    pub var second: NamedCharacterReferenceSecondCodepoint  # bit-field : 8
+
+# mark: NamedCharacterReferenceFirstLayerNode ===================================================
+
+## Web::HTML::NamedCharacterReferenceFirstLayerNode (Build/Libraries/LibWeb/HTML/Parser/NamedCharacterReferences.h:57).
+pub struct NamedCharacterReferenceFirstLayerNode:
+    pub var number: u16
+
+# mark: NamedCharacterReferenceFirstToSecondLayerLink ===========================================
+
+## Web::HTML::NamedCharacterReferenceFirstToSecondLayerLink (Build/Libraries/LibWeb/HTML/Parser/NamedCharacterReferences.h:63).
+pub struct NamedCharacterReferenceFirstToSecondLayerLink:
+    pub var mask: u64  # bit-field : 52
+    pub var second_layer_offset: u64  # bit-field : 12
+
+# mark: NamedCharacterReferenceSecondLayerNode ==================================================
+
+## Web::HTML::NamedCharacterReferenceSecondLayerNode (Build/Libraries/LibWeb/HTML/Parser/NamedCharacterReferences.h:71).
+pub struct NamedCharacterReferenceSecondLayerNode:
+    pub var child_index: u16
+    pub var number: u8
+    pub var children_len: u8  # bit-field : 7
+    pub var end_of_word: bool  # bit-field : 1
+
+# mark: NamedCharacterReferenceNode =============================================================
+
+## Web::HTML::NamedCharacterReferenceNode (Build/Libraries/LibWeb/HTML/Parser/NamedCharacterReferences.h:81).
+pub struct NamedCharacterReferenceNode:
+    pub var character: u8
+    pub var number: u8  # bit-field : 7
+    pub var end_of_word: bool  # bit-field : 1
+    pub var child_index: u16  # bit-field : 12
+    pub var children_len: u16  # bit-field : 4
+
+## Web::HTML::g_named_character_reference_nodes (Build/Libraries/LibWeb/HTML/Parser/NamedCharacterReferences.h:111).
+pub var g_named_character_reference_nodes: NamedCharacterReferenceNode*?
+
+## Web::HTML::g_named_character_reference_first_layer (Build/Libraries/LibWeb/HTML/Parser/NamedCharacterReferences.h:112).
+pub var g_named_character_reference_first_layer: NamedCharacterReferenceFirstLayerNode*?
+
+## Web::HTML::g_named_character_reference_first_to_second_layer (Build/Libraries/LibWeb/HTML/Parser/NamedCharacterReferences.h:113).
+pub var g_named_character_reference_first_to_second_layer: NamedCharacterReferenceFirstToSecondLayerLink*?
+
+## Web::HTML::g_named_character_reference_second_layer (Build/Libraries/LibWeb/HTML/Parser/NamedCharacterReferences.h:114).
+pub var g_named_character_reference_second_layer: NamedCharacterReferenceSecondLayerNode*?
