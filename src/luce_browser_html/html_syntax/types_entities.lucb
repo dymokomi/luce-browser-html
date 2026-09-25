@@ -21,6 +21,11 @@ pub struct NamedCharacterReferenceMatcher:
     pub var m_overconsumed_code_points: u8  # C++ default: { 0 }
     pub var m_ends_with_semicolon: bool  # C++ default: { false }
 
+## The non-zero default member initializers of Web::HTML::NamedCharacterReferenceMatcher; the constructor runs them first.
+pub func named_character_reference_matcher_init_fields(this: NamedCharacterReferenceMatcher*):
+    # m_search_state: C++ default { 0 , 0 } (not translated by the generator)
+    return
+
 ## Web::HTML::NamedCharacterReferenceMatcher::SearchStateTag (Libraries/LibWeb/HTML/Parser/Entities.h:42).
 pub enum NamedCharacterReferenceMatcherSearchStateTag as u8:
     init = 0

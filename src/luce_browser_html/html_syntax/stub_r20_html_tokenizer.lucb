@@ -249,7 +249,7 @@ pub func html_tokenizer_construct_string_view(this: HtmlTokenizer*, input: ak.St
     trap("unported: Web::HTML::HTMLTokenizer::HTMLTokenizer")
 
 ## Ported from Libraries/LibWeb/HTML/Parser/HTMLTokenizer.cpp:299 Web::HTML::HTMLTokenizer::next_token.
-pub func html_tokenizer_next_token(this: HtmlTokenizer*, stop_at_insertion_point: HtmlTokenizerStopAtInsertionPoint) -> HtmlToken?:
+pub func html_tokenizer_next_token(this: HtmlTokenizer*, stop_at_insertion_point: HtmlTokenizerStopAtInsertionPoint = HtmlTokenizerStopAtInsertionPoint.no) -> HtmlToken?:
     trap("unported: Web::HTML::HTMLTokenizer::next_token")
 
 ## Ported from Libraries/LibWeb/HTML/Parser/HTMLTokenizer.cpp:3018 Web::HTML::HTMLTokenizer::switch_to.
@@ -349,7 +349,7 @@ pub func html_tokenizer_peek_code_point(this: const HtmlTokenizer*, offset: isiz
     trap("unported: Web::HTML::HTMLTokenizer::peek_code_point")
 
 ## Ported from Libraries/LibWeb/HTML/Parser/HTMLTokenizer.cpp:2882 Web::HTML::HTMLTokenizer::consume_next_if_match.
-pub func html_tokenizer_consume_next_if_match(this: HtmlTokenizer*, string: ak.StringView, stop_at_insertion_point: HtmlTokenizerStopAtInsertionPoint, case_sensitivity: ak.CaseSensitivity) -> HtmlTokenizerConsumeNextResult:
+pub func html_tokenizer_consume_next_if_match(this: HtmlTokenizer*, string: ak.StringView, stop_at_insertion_point: HtmlTokenizerStopAtInsertionPoint, case_sensitivity: ak.CaseSensitivity = ak.CaseSensitivity.case_sensitive) -> HtmlTokenizerConsumeNextResult:
     trap("unported: Web::HTML::HTMLTokenizer::consume_next_if_match")
 
 ## Ported from Libraries/LibWeb/HTML/Parser/HTMLTokenizer.cpp:198 Web::HTML::HTMLTokenizer::should_pause_before_next_input_character.
@@ -402,5 +402,5 @@ pub func html_tokenizer_restore_to(this: HtmlTokenizer*, new_iterator: isize):
     trap("unported: Web::HTML::HTMLTokenizer::restore_to")
 
 ## Ported from Libraries/LibWeb/HTML/Parser/HTMLTokenizer.cpp:290 Web::HTML::HTMLTokenizer::nth_last_position.
-pub func html_tokenizer_nth_last_position(this: HtmlTokenizer*, n: usize) -> HtmlTokenPosition:
+pub func html_tokenizer_nth_last_position(this: HtmlTokenizer*, n: usize = 0) -> HtmlTokenPosition:
     trap("unported: Web::HTML::HTMLTokenizer::nth_last_position")

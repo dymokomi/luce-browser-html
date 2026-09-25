@@ -100,6 +100,7 @@ Web::HTML::NamedCharacterReferenceCodepoints	luce-browser-html	html_syntax	Named
 Web::HTML::NamedCharacterReferenceFirstLayerNode	luce-browser-html	html_syntax	NamedCharacterReferenceFirstLayerNode	Build/Libraries/LibWeb/HTML/Parser/NamedCharacterReferences.h:57	struct
 Web::HTML::NamedCharacterReferenceFirstToSecondLayerLink	luce-browser-html	html_syntax	NamedCharacterReferenceFirstToSecondLayerLink	Build/Libraries/LibWeb/HTML/Parser/NamedCharacterReferences.h:63	struct
 Web::HTML::NamedCharacterReferenceMatcher	luce-browser-html	html_syntax	NamedCharacterReferenceMatcher	Libraries/LibWeb/HTML/Parser/Entities.h:15	struct
+Web::HTML::NamedCharacterReferenceMatcher [default member initializers]	luce-browser-html	html_syntax	named_character_reference_matcher_init_fields	Libraries/LibWeb/HTML/Parser/Entities.h:15	init fields
 Web::HTML::NamedCharacterReferenceMatcher::SearchState	luce-browser-html	html_syntax	NamedCharacterReferenceMatcherSearchState	Libraries/LibWeb/HTML/Parser/Entities.h:47	struct
 Web::HTML::NamedCharacterReferenceMatcher::SearchStateTag	luce-browser-html	html_syntax	NamedCharacterReferenceMatcherSearchStateTag	Libraries/LibWeb/HTML/Parser/Entities.h:42	enum
 Web::HTML::NamedCharacterReferenceMatcher::code_points	luce-browser-html	html_syntax	named_character_reference_matcher_code_points	Libraries/LibWeb/HTML/Parser/Entities.h:35	stub
