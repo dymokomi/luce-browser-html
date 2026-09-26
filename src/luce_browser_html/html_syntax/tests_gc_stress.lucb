@@ -48,11 +48,11 @@ test "gc stress: the regression case":
 
 noinline func stress_cases():
     check_case("<!DOCTYPE html PUBLIC 'x' \"y\" z>", -1,
-        "DOCTYPE name=html public=x system=y quirks=0 @0:11-0:32\nEOF @0:32-0:32\n")
+               "DOCTYPE name=html public=x system=y quirks=0 @0:11-0:32\nEOF @0:32-0:32\n")
     check_case("<a href=\"?a=1&amp=2&amp;b&copy=3&copy;&copyx&copy\">", -1,
-        "StartTag a self_closing=0 dup=0 attributes=1 [href=?a=1&amp=2&b&copy=3\u{A9}&copyx\u{A9} 0:3-0:7 0:8-0:50] @0:1-0:50\nEOF @0:51-0:51\n")
+               "StartTag a self_closing=0 dup=0 attributes=1 [href=?a=1&amp=2&b&copy=3\u{A9}&copyx\u{A9} 0:3-0:7 0:8-0:50] @0:1-0:50\nEOF @0:51-0:51\n")
     check_case("<p a=1 a=2 A=3>", -1,
-        "StartTag p self_closing=0 dup=1 attributes=1 [a=1 0:3-0:4 0:5-0:6] @0:1-0:14\nEOF @0:15-0:15\n")
+               "StartTag p self_closing=0 dup=1 attributes=1 [a=1 0:3-0:4 0:5-0:6] @0:1-0:14\nEOF @0:15-0:15\n")
 
 test "gc stress: donor-pinned cases":
     # 49 collections on the day this was written.

@@ -331,7 +331,6 @@ pub func html_tokenizer_next_token(this: HtmlTokenizer*, stop_at_insertion_point
 
         if this.m_aborted:
             return none
-
         consume_next: while true:
             if html_tokenizer_should_pause_before_next_input_character(this, stop_at_insertion_point):
                 return none

@@ -105,7 +105,7 @@ struct DafsaBuilder:
 
 func dafsa_builder_create() -> DafsaBuilder!:
     return DafsaBuilder(root = try new Node, minimized_nodes = try new (Node*?)[minimized_table_size],
-        unchecked_nodes = try alloc UncheckedNode[64], unchecked_count = 0, previous_word = "")
+                        unchecked_nodes = try alloc UncheckedNode[64], unchecked_count = 0, previous_word = "")
 
 func dafsa_builder_insert(this: DafsaBuilder*, s: str) -> !:
     if not (s > this.previous_word):
@@ -226,7 +226,7 @@ func write_children_data(node: Node*, node_data: NodeData[], node_data_count: us
         if *node_data_count == node_data.length:
             error(invalid_entities, "too many DAFSA nodes")
         node_data[*node_data_count] = NodeData(character = c_, number = unique_index_tally, end_of_word = child_node.is_terminal,
-            child_index = child_node.child_index else 0, children_len = child_num_children)
+                                               child_index = child_node.child_index else 0, children_len = child_num_children)
         *node_data_count += 1
 
         unique_index_tally += child_node.number

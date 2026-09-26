@@ -280,8 +280,8 @@ pub func html_token_ensure_doctype_data(this: HtmlToken*) -> HtmlTokenDoctypeDat
                 return ptr
             # make<DoctypeData>(), with DoctypeData's default member initializers.
             let ptr = new HtmlTokenDoctypeData(name = ak.string_new(), public_identifier = ak.string_new(),
-                system_identifier = ak.string_new(), missing_name = true, missing_public_identifier = true,
-                missing_system_identifier = true, force_quirks = false) else trap("out of memory")
+                                               system_identifier = ak.string_new(), missing_name = true, missing_public_identifier = true,
+                                               missing_system_identifier = true, force_quirks = false) else trap("out of memory")
             this.m_data = .html_token_doctype_data(value = ptr)
             return ptr
         _: trap("Variant::get<OwnPtr<DoctypeData>>: another alternative is held")

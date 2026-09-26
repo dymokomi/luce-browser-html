@@ -143,28 +143,28 @@ func check_case(input: str, state: i32, expected: str):
 noinline func test_cases_doctype_1():
     # from the data state
     check_case("<!DOCTYPE html>", -1,
-        "DOCTYPE name=html public=<missing> system=<missing> quirks=0 @0:11-0:15\nEOF @0:15-0:15\n")
+               "DOCTYPE name=html public=<missing> system=<missing> quirks=0 @0:11-0:15\nEOF @0:15-0:15\n")
     # from the data state
     check_case("<!DOCTYPE html PUBLIC \"-//W3C//DTD XHTML 1.0 Strict//EN\" \"http://www.w3.org/TR/xhtml1/DTD/xhtml1-strict.dtd\">", -1,
-        "DOCTYPE name=html public=-//W3C//DTD XHTML 1.0 Strict//EN system=http://www.w3.org/TR/xhtml1/DTD/xhtml1-strict.dtd quirks=0 @0:11-0:109\nEOF @0:109-0:109\n")
+               "DOCTYPE name=html public=-//W3C//DTD XHTML 1.0 Strict//EN system=http://www.w3.org/TR/xhtml1/DTD/xhtml1-strict.dtd quirks=0 @0:11-0:109\nEOF @0:109-0:109\n")
     # from the data state
     check_case("<!doctype html system 'about:legacy-compat'>", -1,
-        "DOCTYPE name=html public=<missing> system=about:legacy-compat quirks=0 @0:11-0:44\nEOF @0:44-0:44\n")
+               "DOCTYPE name=html public=<missing> system=about:legacy-compat quirks=0 @0:11-0:44\nEOF @0:44-0:44\n")
     # from the data state
     check_case("<!DOCTYPE>", -1,
-        "DOCTYPE name=<missing> public=<missing> system=<missing> quirks=1 @0:10-0:10\nEOF @0:10-0:10\n")
+               "DOCTYPE name=<missing> public=<missing> system=<missing> quirks=1 @0:10-0:10\nEOF @0:10-0:10\n")
     # from the data state
     check_case("<!DOCTYPE", -1,
-        "DOCTYPE name=<missing> public=<missing> system=<missing> quirks=1 @0:9-0:0\nEOF @0:9-0:9\n")
+               "DOCTYPE name=<missing> public=<missing> system=<missing> quirks=1 @0:9-0:0\nEOF @0:9-0:9\n")
     # from the data state
     check_case("<!DOCTYPEhtml>", -1,
-        "DOCTYPE name=html public=<missing> system=<missing> quirks=0 @0:10-0:14\nEOF @0:14-0:14\n")
+               "DOCTYPE name=html public=<missing> system=<missing> quirks=0 @0:10-0:14\nEOF @0:14-0:14\n")
     # from the data state
     check_case("<!DOCTYPE html PUBLIC>", -1,
-        "DOCTYPE name=html public=<missing> system=<missing> quirks=1 @0:11-0:22\nEOF @0:22-0:22\n")
+               "DOCTYPE name=html public=<missing> system=<missing> quirks=1 @0:11-0:22\nEOF @0:22-0:22\n")
     # from the data state
     check_case("<!DOCTYPE html PUBLIC\"x\"'y'>", -1,
-        "DOCTYPE name=html public=x system=y quirks=0 @0:11-0:28\nEOF @0:28-0:28\n")
+               "DOCTYPE name=html public=x system=y quirks=0 @0:11-0:28\nEOF @0:28-0:28\n")
 
 test "cases_doctype_1":
     with memory.heap: test_cases_doctype_1()
@@ -172,28 +172,28 @@ test "cases_doctype_1":
 noinline func test_cases_doctype_2():
     # from the data state
     check_case("<!DOCTYPE html PUBLIC 'x' \"y\" z>", -1,
-        "DOCTYPE name=html public=x system=y quirks=0 @0:11-0:32\nEOF @0:32-0:32\n")
+               "DOCTYPE name=html public=x system=y quirks=0 @0:11-0:32\nEOF @0:32-0:32\n")
     # from the data state
     check_case("<!DOCTYPE html public \"a>", -1,
-        "DOCTYPE name=html public=a system=<missing> quirks=1 @0:11-0:25\nEOF @0:25-0:25\n")
+               "DOCTYPE name=html public=a system=<missing> quirks=1 @0:11-0:25\nEOF @0:25-0:25\n")
     # from the data state
     check_case("<!DOCTYPE html bogus>", -1,
-        "DOCTYPE name=html public=<missing> system=<missing> quirks=1 @0:11-0:21\nEOF @0:21-0:21\n")
+               "DOCTYPE name=html public=<missing> system=<missing> quirks=1 @0:11-0:21\nEOF @0:21-0:21\n")
     # from the data state
     check_case("<!DOCTYPE html SYSTEM \"a\" junk\0>", -1,
-        "DOCTYPE name=html public=<missing> system=a quirks=0 @0:11-0:32\nEOF @0:32-0:32\n")
+               "DOCTYPE name=html public=<missing> system=a quirks=0 @0:11-0:32\nEOF @0:32-0:32\n")
     # from the data state
     check_case("<!DOCTYPE html SYSTEM>", -1,
-        "DOCTYPE name=html public=<missing> system=<missing> quirks=1 @0:11-0:22\nEOF @0:22-0:22\n")
+               "DOCTYPE name=html public=<missing> system=<missing> quirks=1 @0:11-0:22\nEOF @0:22-0:22\n")
     # from the data state
     check_case("<!DOCTYPE html SYSTEM\"a", -1,
-        "DOCTYPE name=html public=<missing> system= quirks=1 @0:11-0:0\nEOF @0:23-0:23\n")
+               "DOCTYPE name=html public=<missing> system= quirks=1 @0:11-0:0\nEOF @0:23-0:23\n")
     # from the data state
     check_case("<!DOCTYPE HTML\0x\0>", -1,
-        "DOCTYPE name=html�x� public=<missing> system=<missing> quirks=0 @0:11-0:18\nEOF @0:18-0:18\n")
+               "DOCTYPE name=html�x� public=<missing> system=<missing> quirks=0 @0:11-0:18\nEOF @0:18-0:18\n")
     # from the data state
     check_case("<!DOCTYPE \0>", -1,
-        "DOCTYPE name=� public=<missing> system=<missing> quirks=0 @0:11-0:12\nEOF @0:12-0:12\n")
+               "DOCTYPE name=� public=<missing> system=<missing> quirks=0 @0:11-0:12\nEOF @0:12-0:12\n")
 
 test "cases_doctype_2":
     with memory.heap: test_cases_doctype_2()
@@ -201,16 +201,16 @@ test "cases_doctype_2":
 noinline func test_cases_doctype_3():
     # from the data state
     check_case("<!DOCTYPE html PUB", -1,
-        "DOCTYPE name=html public=<missing> system=<missing> quirks=1 @0:11-0:0\nEOF @0:18-0:18\n")
+               "DOCTYPE name=html public=<missing> system=<missing> quirks=1 @0:11-0:0\nEOF @0:18-0:18\n")
     # from the data state
     check_case("<!DOCTYPE html PUBLIC \"a\" 'b", -1,
-        "DOCTYPE name=html public=a system= quirks=1 @0:11-0:0\nEOF @0:28-0:28\n")
+               "DOCTYPE name=html public=a system= quirks=1 @0:11-0:0\nEOF @0:28-0:28\n")
     # from the data state
     check_case("<!DOCTYPE html PUBLIC 'a'>", -1,
-        "DOCTYPE name=html public=a system=<missing> quirks=0 @0:11-0:26\nEOF @0:26-0:26\n")
+               "DOCTYPE name=html public=a system=<missing> quirks=0 @0:11-0:26\nEOF @0:26-0:26\n")
     # from the data state
     check_case("<!DOCTYPE html PUBLIC \"a\0b\" 'c\0d'>", -1,
-        "DOCTYPE name=html public=a�b system=c�d quirks=0 @0:11-0:34\nEOF @0:34-0:34\n")
+               "DOCTYPE name=html public=a�b system=c�d quirks=0 @0:11-0:34\nEOF @0:34-0:34\n")
 
 test "cases_doctype_3":
     with memory.heap: test_cases_doctype_3()
@@ -220,28 +220,28 @@ test "cases_doctype_3":
 noinline func test_cases_comments_and_markup_declarations_1():
     # from the data state
     check_case("<!---->", -1,
-        "Comment  @0:0-0:7\nEOF @0:7-0:7\n")
+               "Comment  @0:0-0:7\nEOF @0:7-0:7\n")
     # from the data state
     check_case("<!-->", -1,
-        "Comment  @0:0-0:5\nEOF @0:5-0:5\n")
+               "Comment  @0:0-0:5\nEOF @0:5-0:5\n")
     # from the data state
     check_case("<!--->", -1,
-        "Comment  @0:0-0:6\nEOF @0:6-0:6\n")
+               "Comment  @0:0-0:6\nEOF @0:6-0:6\n")
     # from the data state
     check_case("<!-- a -- b --!>", -1,
-        "Comment  a -- b  @0:0-0:16\nEOF @0:16-0:16\n")
+               "Comment  a -- b  @0:0-0:16\nEOF @0:16-0:16\n")
     # from the data state
     check_case("<!--<!-- nested -->", -1,
-        "Comment <!-- nested  @0:0-0:19\nEOF @0:19-0:19\n")
+               "Comment <!-- nested  @0:0-0:19\nEOF @0:19-0:19\n")
     # from the data state
     check_case("<!--<!--->", -1,
-        "Comment <!- @0:0-0:10\nEOF @0:10-0:10\n")
+               "Comment <!- @0:0-0:10\nEOF @0:10-0:10\n")
     # from the data state
     check_case("<!--<!---->", -1,
-        "Comment <!-- @0:0-0:11\nEOF @0:11-0:11\n")
+               "Comment <!-- @0:0-0:11\nEOF @0:11-0:11\n")
     # from the data state
     check_case("<!--<!-x-->", -1,
-        "Comment <!-x @0:0-0:11\nEOF @0:11-0:11\n")
+               "Comment <!-x @0:0-0:11\nEOF @0:11-0:11\n")
 
 test "cases_comments_and_markup_declarations_1":
     with memory.heap: test_cases_comments_and_markup_declarations_1()
@@ -249,28 +249,28 @@ test "cases_comments_and_markup_declarations_1":
 noinline func test_cases_comments_and_markup_declarations_2():
     # from the data state
     check_case("<!--<<!--a-->", -1,
-        "Comment <<!--a @0:0-0:13\nEOF @0:13-0:13\n")
+               "Comment <<!--a @0:0-0:13\nEOF @0:13-0:13\n")
     # from the data state
     check_case("<!-- unterminated", -1,
-        "Comment  unterminated @0:0-0:17\nEOF @0:17-0:17\n")
+               "Comment  unterminated @0:0-0:17\nEOF @0:17-0:17\n")
     # from the data state
     check_case("<!--a--!b-->", -1,
-        "Comment a--!b @0:0-0:12\nEOF @0:12-0:12\n")
+               "Comment a--!b @0:0-0:12\nEOF @0:12-0:12\n")
     # from the data state
     check_case("<!--a--!-->", -1,
-        "Comment a--! @0:0-0:11\nEOF @0:11-0:11\n")
+               "Comment a--! @0:0-0:11\nEOF @0:11-0:11\n")
     # from the data state
     check_case("<!--a--!", -1,
-        "Comment a @0:0-0:8\nEOF @0:8-0:8\n")
+               "Comment a @0:0-0:8\nEOF @0:8-0:8\n")
     # from the data state
     check_case("<!--a---->", -1,
-        "Comment a-- @0:0-0:10\nEOF @0:10-0:10\n")
+               "Comment a-- @0:0-0:10\nEOF @0:10-0:10\n")
     # from the data state
     check_case("<!--a--", -1,
-        "Comment a @0:0-0:7\nEOF @0:7-0:7\n")
+               "Comment a @0:0-0:7\nEOF @0:7-0:7\n")
     # from the data state
     check_case("<!--a-", -1,
-        "Comment a @0:0-0:6\nEOF @0:6-0:6\n")
+               "Comment a @0:0-0:6\nEOF @0:6-0:6\n")
 
 test "cases_comments_and_markup_declarations_2":
     with memory.heap: test_cases_comments_and_markup_declarations_2()
@@ -278,28 +278,28 @@ test "cases_comments_and_markup_declarations_2":
 noinline func test_cases_comments_and_markup_declarations_3():
     # from the data state
     check_case("<!---", -1,
-        "Comment  @0:0-0:5\nEOF @0:5-0:5\n")
+               "Comment  @0:0-0:5\nEOF @0:5-0:5\n")
     # from the data state
     check_case("<!--", -1,
-        "Comment  @0:0-0:4\nEOF @0:4-0:4\n")
+               "Comment  @0:0-0:4\nEOF @0:4-0:4\n")
     # from the data state
     check_case("<!--\0-->", -1,
-        "Comment � @0:0-0:8\nEOF @0:8-0:8\n")
+               "Comment � @0:0-0:8\nEOF @0:8-0:8\n")
     # from the data state
     check_case("<?php bogus \0 ?>", -1,
-        "Comment ?php bogus � ? @0:0-0:16\nEOF @0:16-0:16\n")
+               "Comment ?php bogus � ? @0:0-0:16\nEOF @0:16-0:16\n")
     # from the data state
     check_case("<?php", -1,
-        "Comment ?php @0:0-0:5\nEOF @0:5-0:5\n")
+               "Comment ?php @0:0-0:5\nEOF @0:5-0:5\n")
     # from the data state
     check_case("</>", -1,
-        "EOF @0:3-0:3\n")
+               "EOF @0:3-0:3\n")
     # from the data state
     check_case("</3>", -1,
-        "Comment 3 @0:3-0:4\nEOF @0:4-0:4\n")
+               "Comment 3 @0:3-0:4\nEOF @0:4-0:4\n")
     # from the data state
     check_case("</", -1,
-        "Character U+003C @0:0-0:0\nCharacter U+002F @0:0-0:0\nEOF @0:2-0:2\n")
+               "Character U+003C @0:0-0:0\nCharacter U+002F @0:0-0:0\nEOF @0:2-0:2\n")
 
 test "cases_comments_and_markup_declarations_3":
     with memory.heap: test_cases_comments_and_markup_declarations_3()
@@ -307,22 +307,22 @@ test "cases_comments_and_markup_declarations_3":
 noinline func test_cases_comments_and_markup_declarations_4():
     # from the data state
     check_case("<!x>", -1,
-        "Comment x @0:2-0:4\nEOF @0:4-0:4\n")
+               "Comment x @0:2-0:4\nEOF @0:4-0:4\n")
     # from the data state
     check_case("<!", -1,
-        "Comment  @0:2-0:2\nEOF @0:2-0:2\n")
+               "Comment  @0:2-0:2\nEOF @0:2-0:2\n")
     # from the data state
     check_case("<!-", -1,
-        "Comment - @0:2-0:3\nEOF @0:3-0:3\n")
+               "Comment - @0:2-0:3\nEOF @0:3-0:3\n")
     # from the data state
     check_case("<!DOC", -1,
-        "Comment DOC @0:2-0:5\nEOF @0:5-0:5\n")
+               "Comment DOC @0:2-0:5\nEOF @0:5-0:5\n")
     # from the data state
     check_case("<![CDATA[x]]>", -1,
-        "Comment [CDATA[x]] @0:9-0:13\nEOF @0:13-0:13\n")
+               "Comment [CDATA[x]] @0:9-0:13\nEOF @0:13-0:13\n")
     # from the data state
     check_case("<![CDA", -1,
-        "Comment [CDA @0:2-0:6\nEOF @0:6-0:6\n")
+               "Comment [CDA @0:2-0:6\nEOF @0:6-0:6\n")
 
 test "cases_comments_and_markup_declarations_4":
     with memory.heap: test_cases_comments_and_markup_declarations_4()
@@ -332,28 +332,28 @@ test "cases_comments_and_markup_declarations_4":
 noinline func test_cases_tags_and_attributes_1():
     # from the data state
     check_case("<a b=c d='e' f=\"g\" h>", -1,
-        "StartTag a self_closing=0 dup=0 attributes=4 [b=c 0:3-0:4 0:5-0:6] [d=e 0:7-0:8 0:9-0:12] [f=g 0:13-0:14 0:15-0:18] [h= 0:19-0:20 0:0-0:0] @0:1-0:20\nEOF @0:21-0:21\n")
+               "StartTag a self_closing=0 dup=0 attributes=4 [b=c 0:3-0:4 0:5-0:6] [d=e 0:7-0:8 0:9-0:12] [f=g 0:13-0:14 0:15-0:18] [h= 0:19-0:20 0:0-0:0] @0:1-0:20\nEOF @0:21-0:21\n")
     # from the data state
     check_case("<A HREF=X>", -1,
-        "StartTag a self_closing=0 dup=0 attributes=1 [href=X 0:3-0:7 0:8-0:9] @0:1-0:9\nEOF @0:10-0:10\n")
+               "StartTag a self_closing=0 dup=0 attributes=1 [href=X 0:3-0:7 0:8-0:9] @0:1-0:9\nEOF @0:10-0:10\n")
     # from the data state
     check_case("<br/>", -1,
-        "StartTag br self_closing=1 dup=0 attributes=0 @0:1-0:4\nEOF @0:5-0:5\n")
+               "StartTag br self_closing=1 dup=0 attributes=0 @0:1-0:4\nEOF @0:5-0:5\n")
     # from the data state
     check_case("<br />", -1,
-        "StartTag br self_closing=1 dup=0 attributes=0 @0:1-0:5\nEOF @0:6-0:6\n")
+               "StartTag br self_closing=1 dup=0 attributes=0 @0:1-0:5\nEOF @0:6-0:6\n")
     # from the data state
     check_case("<br/x>", -1,
-        "StartTag br self_closing=0 dup=0 attributes=1 [x= 0:4-0:5 0:0-0:0] @0:1-0:5\nEOF @0:6-0:6\n")
+               "StartTag br self_closing=0 dup=0 attributes=1 [x= 0:4-0:5 0:0-0:0] @0:1-0:5\nEOF @0:6-0:6\n")
     # from the data state
     check_case("<p a=1 a=2 A=3>", -1,
-        "StartTag p self_closing=0 dup=1 attributes=1 [a=1 0:3-0:4 0:5-0:6] @0:1-0:14\nEOF @0:15-0:15\n")
+               "StartTag p self_closing=0 dup=1 attributes=1 [a=1 0:3-0:4 0:5-0:6] @0:1-0:14\nEOF @0:15-0:15\n")
     # from the data state
     check_case("<p a=\"x\"b>", -1,
-        "StartTag p self_closing=0 dup=0 attributes=2 [a=x 0:3-0:4 0:5-0:8] [b= 0:8-0:9 0:0-0:0] @0:1-0:9\nEOF @0:10-0:10\n")
+               "StartTag p self_closing=0 dup=0 attributes=2 [a=x 0:3-0:4 0:5-0:8] [b= 0:8-0:9 0:0-0:0] @0:1-0:9\nEOF @0:10-0:10\n")
     # from the data state
     check_case("<p =a>", -1,
-        "StartTag p self_closing=0 dup=0 attributes=1 [=a= 0:3-0:5 0:0-0:0] @0:1-0:5\nEOF @0:6-0:6\n")
+               "StartTag p self_closing=0 dup=0 attributes=1 [=a= 0:3-0:5 0:0-0:0] @0:1-0:5\nEOF @0:6-0:6\n")
 
 test "cases_tags_and_attributes_1":
     with memory.heap: test_cases_tags_and_attributes_1()
@@ -361,28 +361,28 @@ test "cases_tags_and_attributes_1":
 noinline func test_cases_tags_and_attributes_2():
     # from the data state
     check_case("<p \"a\" 'b' <c>", -1,
-        "StartTag p self_closing=0 dup=0 attributes=3 [\"a\"= 0:3-0:6 0:0-0:0] ['b'= 0:7-0:10 0:0-0:0] [<c= 0:11-0:13 0:0-0:0] @0:1-0:13\nEOF @0:14-0:14\n")
+               "StartTag p self_closing=0 dup=0 attributes=3 [\"a\"= 0:3-0:6 0:0-0:0] ['b'= 0:7-0:10 0:0-0:0] [<c= 0:11-0:13 0:0-0:0] @0:1-0:13\nEOF @0:14-0:14\n")
     # from the data state
     check_case("<a b=c`=d\"e'f<g>", -1,
-        "StartTag a self_closing=0 dup=0 attributes=1 [b=c`=d\"e'f<g 0:3-0:4 0:5-0:15] @0:1-0:15\nEOF @0:16-0:16\n")
+               "StartTag a self_closing=0 dup=0 attributes=1 [b=c`=d\"e'f<g 0:3-0:4 0:5-0:15] @0:1-0:15\nEOF @0:16-0:16\n")
     # from the data state
     check_case("<a\0b c\0=d\0 e='\0' f=\"\0\">", -1,
-        "StartTag a�b self_closing=0 dup=0 attributes=3 [c�=d� 0:5-0:7 0:8-0:10] [e=� 0:11-0:12 0:13-0:16] [f=� 0:17-0:18 0:19-0:22] @0:1-0:22\nEOF @0:23-0:23\n")
+               "StartTag a�b self_closing=0 dup=0 attributes=3 [c�=d� 0:5-0:7 0:8-0:10] [e=� 0:11-0:12 0:13-0:16] [f=� 0:17-0:18 0:19-0:22] @0:1-0:22\nEOF @0:23-0:23\n")
     # from the data state
     check_case("<a", -1,
-        "EOF @0:2-0:2\n")
+               "EOF @0:2-0:2\n")
     # from the data state
     check_case("<a b", -1,
-        "EOF @0:4-0:4\n")
+               "EOF @0:4-0:4\n")
     # from the data state
     check_case("<a b=", -1,
-        "EOF @0:5-0:5\n")
+               "EOF @0:5-0:5\n")
     # from the data state
     check_case("<a b=\"c", -1,
-        "EOF @0:7-0:7\n")
+               "EOF @0:7-0:7\n")
     # from the data state
     check_case("<a b='c", -1,
-        "EOF @0:7-0:7\n")
+               "EOF @0:7-0:7\n")
 
 test "cases_tags_and_attributes_2":
     with memory.heap: test_cases_tags_and_attributes_2()
@@ -390,28 +390,28 @@ test "cases_tags_and_attributes_2":
 noinline func test_cases_tags_and_attributes_3():
     # from the data state
     check_case("<a b=c", -1,
-        "EOF @0:6-0:6\n")
+               "EOF @0:6-0:6\n")
     # from the data state
     check_case("<a b=\"c\"", -1,
-        "EOF @0:8-0:8\n")
+               "EOF @0:8-0:8\n")
     # from the data state
     check_case("<a b/", -1,
-        "EOF @0:5-0:5\n")
+               "EOF @0:5-0:5\n")
     # from the data state
     check_case("<a b=\"c\"d>", -1,
-        "StartTag a self_closing=0 dup=0 attributes=2 [b=c 0:3-0:4 0:5-0:8] [d= 0:8-0:9 0:0-0:0] @0:1-0:9\nEOF @0:10-0:10\n")
+               "StartTag a self_closing=0 dup=0 attributes=2 [b=c 0:3-0:4 0:5-0:8] [d= 0:8-0:9 0:0-0:0] @0:1-0:9\nEOF @0:10-0:10\n")
     # from the data state
     check_case("</a b=c>", -1,
-        "EndTag a self_closing=0 dup=0 attributes=1 [b=c 0:4-0:5 0:6-0:7] @0:2-0:7\nEOF @0:8-0:8\n")
+               "EndTag a self_closing=0 dup=0 attributes=1 [b=c 0:4-0:5 0:6-0:7] @0:2-0:7\nEOF @0:8-0:8\n")
     # from the data state
     check_case("</A>", -1,
-        "EndTag a self_closing=0 dup=0 attributes=0 @0:2-0:3\nEOF @0:4-0:4\n")
+               "EndTag a self_closing=0 dup=0 attributes=0 @0:2-0:3\nEOF @0:4-0:4\n")
     # from the data state
     check_case("< p>", -1,
-        "Character U+003C @0:0-0:0\nCharacter U+0020 @0:2-0:0\nCharacter U+0070 @0:3-0:0\nCharacter U+003E @0:4-0:0\nEOF @0:4-0:4\n")
+               "Character U+003C @0:0-0:0\nCharacter U+0020 @0:2-0:0\nCharacter U+0070 @0:3-0:0\nCharacter U+003E @0:4-0:0\nEOF @0:4-0:4\n")
     # from the data state
     check_case("<3", -1,
-        "Character U+003C @0:0-0:0\nCharacter U+0033 @0:2-0:0\nEOF @0:2-0:2\n")
+               "Character U+003C @0:0-0:0\nCharacter U+0033 @0:2-0:0\nEOF @0:2-0:2\n")
 
 test "cases_tags_and_attributes_3":
     with memory.heap: test_cases_tags_and_attributes_3()
@@ -419,19 +419,19 @@ test "cases_tags_and_attributes_3":
 noinline func test_cases_tags_and_attributes_4():
     # from the data state
     check_case("<", -1,
-        "Character U+003C @0:0-0:0\nEOF @0:1-0:1\n")
+               "Character U+003C @0:0-0:0\nEOF @0:1-0:1\n")
     # from the data state
     check_case("a<b\tc=d\ne=f\u{C}g=h>", -1,
-        "Character U+0061 @0:1-0:0\nStartTag b self_closing=0 dup=0 attributes=3 [c=d 0:4-0:5 0:6-0:7] [e=f 1:0-1:1 1:2-1:3] [g=h 1:4-1:5 1:6-1:7] @0:2-1:7\nEOF @1:8-1:8\n")
+               "Character U+0061 @0:1-0:0\nStartTag b self_closing=0 dup=0 attributes=3 [c=d 0:4-0:5 0:6-0:7] [e=f 1:0-1:1 1:2-1:3] [g=h 1:4-1:5 1:6-1:7] @0:2-1:7\nEOF @1:8-1:8\n")
     # from the data state
     check_case("<a b = \"c\" >", -1,
-        "StartTag a self_closing=0 dup=0 attributes=1 [b=c 0:3-0:5 0:7-0:10] @0:1-0:11\nEOF @0:12-0:12\n")
+               "StartTag a self_closing=0 dup=0 attributes=1 [b=c 0:3-0:5 0:7-0:10] @0:1-0:11\nEOF @0:12-0:12\n")
     # from the data state
     check_case("<a b=>", -1,
-        "StartTag a self_closing=0 dup=0 attributes=1 [b= 0:3-0:4 0:5-0:0] @0:1-0:5\nEOF @0:6-0:6\n")
+               "StartTag a self_closing=0 dup=0 attributes=1 [b= 0:3-0:4 0:5-0:0] @0:1-0:5\nEOF @0:6-0:6\n")
     # from the data state
     check_case("<abc\0DEF>", -1,
-        "StartTag abc�def self_closing=0 dup=0 attributes=0 @0:1-0:8\nEOF @0:9-0:9\n")
+               "StartTag abc�def self_closing=0 dup=0 attributes=0 @0:1-0:8\nEOF @0:9-0:9\n")
 
 test "cases_tags_and_attributes_4":
     with memory.heap: test_cases_tags_and_attributes_4()
@@ -441,28 +441,28 @@ test "cases_tags_and_attributes_4":
 noinline func test_cases_character_references_1():
     # from the data state
     check_case("&amp; &AMP &amp &ampx &amp=", -1,
-        "Character U+0026 @0:5-0:0\nCharacter U+0020 @0:6-0:0\nCharacter U+0026 @0:10-0:0\nCharacter U+0020 @0:11-0:0\nCharacter U+0026 @0:15-0:0\nCharacter U+0020 @0:16-0:0\nCharacter U+0026 @0:20-0:0\nCharacter U+0078 @0:21-0:0\nCharacter U+0020 @0:22-0:0\nCharacter U+0026 @0:26-0:0\nCharacter U+003D @0:27-0:0\nEOF @0:27-0:27\n")
+               "Character U+0026 @0:5-0:0\nCharacter U+0020 @0:6-0:0\nCharacter U+0026 @0:10-0:0\nCharacter U+0020 @0:11-0:0\nCharacter U+0026 @0:15-0:0\nCharacter U+0020 @0:16-0:0\nCharacter U+0026 @0:20-0:0\nCharacter U+0078 @0:21-0:0\nCharacter U+0020 @0:22-0:0\nCharacter U+0026 @0:26-0:0\nCharacter U+003D @0:27-0:0\nEOF @0:27-0:27\n")
     # from the data state
     check_case("&notin; &notindot; &notinvc;", -1,
-        "Character U+2209 @0:7-0:0\nCharacter U+0020 @0:8-0:0\nCharacter U+22F5 @0:18-0:0\nCharacter U+0338 @0:18-0:0\nCharacter U+0020 @0:19-0:0\nCharacter U+22F6 @0:28-0:0\nEOF @0:28-0:28\n")
+               "Character U+2209 @0:7-0:0\nCharacter U+0020 @0:8-0:0\nCharacter U+22F5 @0:18-0:0\nCharacter U+0338 @0:18-0:0\nCharacter U+0020 @0:19-0:0\nCharacter U+22F6 @0:28-0:0\nEOF @0:28-0:28\n")
     # from the data state
     check_case("&NotEqualTilde; &fjlig; &nGt; &acE;", -1,
-        "Character U+2242 @0:15-0:0\nCharacter U+0338 @0:15-0:0\nCharacter U+0020 @0:16-0:0\nCharacter U+0066 @0:23-0:0\nCharacter U+006A @0:23-0:0\nCharacter U+0020 @0:24-0:0\nCharacter U+226B @0:29-0:0\nCharacter U+20D2 @0:29-0:0\nCharacter U+0020 @0:30-0:0\nCharacter U+223E @0:35-0:0\nCharacter U+0333 @0:35-0:0\nEOF @0:35-0:35\n")
+               "Character U+2242 @0:15-0:0\nCharacter U+0338 @0:15-0:0\nCharacter U+0020 @0:16-0:0\nCharacter U+0066 @0:23-0:0\nCharacter U+006A @0:23-0:0\nCharacter U+0020 @0:24-0:0\nCharacter U+226B @0:29-0:0\nCharacter U+20D2 @0:29-0:0\nCharacter U+0020 @0:30-0:0\nCharacter U+223E @0:35-0:0\nCharacter U+0333 @0:35-0:0\nEOF @0:35-0:35\n")
     # from the data state
     check_case("&#0; &#x110000; &#xD800; &#128; &#x9F; &#13; &#x81;", -1,
-        "Character U+FFFD @0:4-0:0\nCharacter U+0020 @0:5-0:0\nCharacter U+FFFD @0:15-0:0\nCharacter U+0020 @0:16-0:0\nCharacter U+FFFD @0:24-0:0\nCharacter U+0020 @0:25-0:0\nCharacter U+20AC @0:31-0:0\nCharacter U+0020 @0:32-0:0\nCharacter U+0178 @0:38-0:0\nCharacter U+0020 @0:39-0:0\nCharacter U+000D @0:44-0:0\nCharacter U+0020 @0:45-0:0\nCharacter U+0081 @0:51-0:0\nEOF @0:51-0:51\n")
+               "Character U+FFFD @0:4-0:0\nCharacter U+0020 @0:5-0:0\nCharacter U+FFFD @0:15-0:0\nCharacter U+0020 @0:16-0:0\nCharacter U+FFFD @0:24-0:0\nCharacter U+0020 @0:25-0:0\nCharacter U+20AC @0:31-0:0\nCharacter U+0020 @0:32-0:0\nCharacter U+0178 @0:38-0:0\nCharacter U+0020 @0:39-0:0\nCharacter U+000D @0:44-0:0\nCharacter U+0020 @0:45-0:0\nCharacter U+0081 @0:51-0:0\nEOF @0:51-0:51\n")
     # from the data state
     check_case("&#99999999999; &#xFFFFFFFFF;", -1,
-        "Character U+FFFD @0:14-0:0\nCharacter U+0020 @0:15-0:0\nCharacter U+FFFD @0:28-0:0\nEOF @0:28-0:28\n")
+               "Character U+FFFD @0:14-0:0\nCharacter U+0020 @0:15-0:0\nCharacter U+FFFD @0:28-0:0\nEOF @0:28-0:28\n")
     # from the data state
     check_case("&#; &#x; &#xZ &#a &# &#x", -1,
-        "Character U+0026 @0:3-0:0\nCharacter U+0023 @0:3-0:0\nCharacter U+003B @0:3-0:0\nCharacter U+0020 @0:4-0:0\nCharacter U+0026 @0:8-0:0\nCharacter U+0023 @0:8-0:0\nCharacter U+0078 @0:8-0:0\nCharacter U+003B @0:8-0:0\nCharacter U+0020 @0:9-0:0\nCharacter U+0026 @0:13-0:0\nCharacter U+0023 @0:13-0:0\nCharacter U+0078 @0:13-0:0\nCharacter U+005A @0:13-0:0\nCharacter U+0020 @0:14-0:0\nCharacter U+0026 @0:17-0:0\nCharacter U+0023 @0:17-0:0\nCharacter U+0061 @0:17-0:0\nCharacter U+0020 @0:18-0:0\nCharacter U+0026 @0:21-0:0\nCharacter U+0023 @0:21-0:0\nCharacter U+0020 @0:21-0:0\nCharacter U+0026 @0:24-0:0\nCharacter U+0023 @0:24-0:0\nCharacter U+0078 @0:24-0:0\nEOF @0:24-0:24\n")
+               "Character U+0026 @0:3-0:0\nCharacter U+0023 @0:3-0:0\nCharacter U+003B @0:3-0:0\nCharacter U+0020 @0:4-0:0\nCharacter U+0026 @0:8-0:0\nCharacter U+0023 @0:8-0:0\nCharacter U+0078 @0:8-0:0\nCharacter U+003B @0:8-0:0\nCharacter U+0020 @0:9-0:0\nCharacter U+0026 @0:13-0:0\nCharacter U+0023 @0:13-0:0\nCharacter U+0078 @0:13-0:0\nCharacter U+005A @0:13-0:0\nCharacter U+0020 @0:14-0:0\nCharacter U+0026 @0:17-0:0\nCharacter U+0023 @0:17-0:0\nCharacter U+0061 @0:17-0:0\nCharacter U+0020 @0:18-0:0\nCharacter U+0026 @0:21-0:0\nCharacter U+0023 @0:21-0:0\nCharacter U+0020 @0:21-0:0\nCharacter U+0026 @0:24-0:0\nCharacter U+0023 @0:24-0:0\nCharacter U+0078 @0:24-0:0\nEOF @0:24-0:24\n")
     # from the data state
     check_case("&unknown; &am &; & &", -1,
-        "Character U+0026 @0:1-0:0\nCharacter U+0075 @0:2-0:0\nCharacter U+006E @0:3-0:0\nCharacter U+006B @0:4-0:0\nCharacter U+006E @0:5-0:0\nCharacter U+006F @0:6-0:0\nCharacter U+0077 @0:7-0:0\nCharacter U+006E @0:8-0:0\nCharacter U+003B @0:9-0:0\nCharacter U+0020 @0:10-0:0\nCharacter U+0026 @0:11-0:0\nCharacter U+0061 @0:12-0:0\nCharacter U+006D @0:13-0:0\nCharacter U+0020 @0:14-0:0\nCharacter U+0026 @0:16-0:0\nCharacter U+003B @0:16-0:0\nCharacter U+0020 @0:17-0:0\nCharacter U+0026 @0:19-0:0\nCharacter U+0020 @0:19-0:0\nCharacter U+0026 @0:20-0:0\nEOF @0:20-0:20\n")
+               "Character U+0026 @0:1-0:0\nCharacter U+0075 @0:2-0:0\nCharacter U+006E @0:3-0:0\nCharacter U+006B @0:4-0:0\nCharacter U+006E @0:5-0:0\nCharacter U+006F @0:6-0:0\nCharacter U+0077 @0:7-0:0\nCharacter U+006E @0:8-0:0\nCharacter U+003B @0:9-0:0\nCharacter U+0020 @0:10-0:0\nCharacter U+0026 @0:11-0:0\nCharacter U+0061 @0:12-0:0\nCharacter U+006D @0:13-0:0\nCharacter U+0020 @0:14-0:0\nCharacter U+0026 @0:16-0:0\nCharacter U+003B @0:16-0:0\nCharacter U+0020 @0:17-0:0\nCharacter U+0026 @0:19-0:0\nCharacter U+0020 @0:19-0:0\nCharacter U+0026 @0:20-0:0\nEOF @0:20-0:20\n")
     # from the data state
     check_case("&#65&#x41&#X41;&#x0041;", -1,
-        "Character U+0041 @0:4-0:0\nCharacter U+0041 @0:9-0:0\nCharacter U+0041 @0:15-0:0\nCharacter U+0041 @0:23-0:0\nEOF @0:23-0:23\n")
+               "Character U+0041 @0:4-0:0\nCharacter U+0041 @0:9-0:0\nCharacter U+0041 @0:15-0:0\nCharacter U+0041 @0:23-0:0\nEOF @0:23-0:23\n")
 
 test "cases_character_references_1":
     with memory.heap: test_cases_character_references_1()
@@ -470,22 +470,22 @@ test "cases_character_references_1":
 noinline func test_cases_character_references_2():
     # from the data state
     check_case("&#xFDD0; &#xFFFE; &#x1FFFF; &#x7F; &#x0B;", -1,
-        "Character U+FDD0 @0:8-0:0\nCharacter U+0020 @0:9-0:0\nCharacter U+FFFE @0:17-0:0\nCharacter U+0020 @0:18-0:0\nCharacter U+1FFFF @0:27-0:0\nCharacter U+0020 @0:28-0:0\nCharacter U+007F @0:34-0:0\nCharacter U+0020 @0:35-0:0\nCharacter U+000B @0:41-0:0\nEOF @0:41-0:41\n")
+               "Character U+FDD0 @0:8-0:0\nCharacter U+0020 @0:9-0:0\nCharacter U+FFFE @0:17-0:0\nCharacter U+0020 @0:18-0:0\nCharacter U+1FFFF @0:27-0:0\nCharacter U+0020 @0:28-0:0\nCharacter U+007F @0:34-0:0\nCharacter U+0020 @0:35-0:0\nCharacter U+000B @0:41-0:0\nEOF @0:41-0:41\n")
     # from the data state
     check_case("<a href=\"?a=1&amp=2&amp;b&copy=3&copy;&copyx&copy\">", -1,
-        "StartTag a self_closing=0 dup=0 attributes=1 [href=?a=1&amp=2&b&copy=3©&copyx© 0:3-0:7 0:8-0:50] @0:1-0:50\nEOF @0:51-0:51\n")
+               "StartTag a self_closing=0 dup=0 attributes=1 [href=?a=1&amp=2&b&copy=3©&copyx© 0:3-0:7 0:8-0:50] @0:1-0:50\nEOF @0:51-0:51\n")
     # from the data state
     check_case("<a x=&notit; y=&amp z='&amp' w=\"&#65;&#x42&q;\">", -1,
-        "StartTag a self_closing=0 dup=0 attributes=4 [x=&notit; 0:3-0:4 0:5-0:10] [y=& 0:11-0:12 0:13-0:17] [z=& 0:18-0:19 0:20-0:26] [w=AB&q; 0:27-0:28 0:29-0:44] @0:1-0:44\nEOF @0:45-0:45\n")
+               "StartTag a self_closing=0 dup=0 attributes=4 [x=&notit; 0:3-0:4 0:5-0:10] [y=& 0:11-0:12 0:13-0:17] [z=& 0:18-0:19 0:20-0:26] [w=AB&q; 0:27-0:28 0:29-0:44] @0:1-0:44\nEOF @0:45-0:45\n")
     # from the data state
     check_case("<a x=\"&\" y=& z='&#'>", -1,
-        "StartTag a self_closing=0 dup=0 attributes=3 [x=& 0:3-0:4 0:5-0:8] [y=& 0:9-0:10 0:11-0:12] [z=&# 0:13-0:14 0:15-0:19] @0:1-0:19\nEOF @0:20-0:20\n")
+               "StartTag a self_closing=0 dup=0 attributes=3 [x=& 0:3-0:4 0:5-0:8] [y=& 0:9-0:10 0:11-0:12] [z=&# 0:13-0:14 0:15-0:19] @0:1-0:19\nEOF @0:20-0:20\n")
     # from the data state
     check_case("&Aacute&aacute;&Aacut", -1,
-        "Character U+00C1 @0:7-0:0\nCharacter U+00E1 @0:15-0:0\nCharacter U+0026 @0:0-0:0\nCharacter U+0041 @0:0-0:0\nCharacter U+0061 @0:0-0:0\nCharacter U+0063 @0:0-0:0\nCharacter U+0075 @0:0-0:0\nCharacter U+0074 @0:0-0:0\nEOF @0:0-0:0\n")
+               "Character U+00C1 @0:7-0:0\nCharacter U+00E1 @0:15-0:0\nCharacter U+0026 @0:0-0:0\nCharacter U+0041 @0:0-0:0\nCharacter U+0061 @0:0-0:0\nCharacter U+0063 @0:0-0:0\nCharacter U+0075 @0:0-0:0\nCharacter U+0074 @0:0-0:0\nEOF @0:0-0:0\n")
     # from the data state
     check_case("&ThickSpace;&NotSquareSubset;&bne;", -1,
-        "Character U+205F @0:12-0:0\nCharacter U+200A @0:12-0:0\nCharacter U+228F @0:29-0:0\nCharacter U+0338 @0:29-0:0\nCharacter U+003D @0:34-0:0\nCharacter U+20E5 @0:34-0:0\nEOF @0:34-0:34\n")
+               "Character U+205F @0:12-0:0\nCharacter U+200A @0:12-0:0\nCharacter U+228F @0:29-0:0\nCharacter U+0338 @0:29-0:0\nCharacter U+003D @0:34-0:0\nCharacter U+20E5 @0:34-0:0\nEOF @0:34-0:34\n")
 
 test "cases_character_references_2":
     with memory.heap: test_cases_character_references_2()
