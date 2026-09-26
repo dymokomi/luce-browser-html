@@ -1,0 +1,147 @@
+#==============================================================================================
+#
+#   entities - named character references: the DAFSA matcher and the code point lookup
+#
+#   DESCRIPTION:
+#       Port of Libraries/LibWeb/HTML/Parser/Entities.cpp (lines 1-99) and Entities.h (lines
+#       1-60), with the inline functions of the generated
+#       Build/Libraries/LibWeb/HTML/Parser/NamedCharacterReferences.h (lines 22-45) and the one
+#       function of the generated NamedCharacterReferences.cpp (lines 6176-6180). The tables
+#       themselves are in named_character_reference_tables.lucb, written by tools/gen_entities.
+#
+#==============================================================================================
+
+# mark: NamedCharacterReferences.h ==============================================================
+
+## Ported from Build/Libraries/LibWeb/HTML/Parser/NamedCharacterReferences.h:22 Web::HTML::named_character_reference_second_codepoint_value.
+pub func named_character_reference_second_codepoint_value(codepoint: NamedCharacterReferenceSecondCodepoint) -> u16?:
+    match codepoint:
+        .none_: return none
+        .combining_long_solidus_overlay: return 0x0338
+        .combining_long_vertical_line_overlay: return 0x20D2
+        .hair_space: return 0x200A
+        .combining_double_low_line: return 0x0333
+        .combining_reverse_solidus_overlay: return 0x20E5
+        .variation_selector1: return 0xFE00
+        .latin_small_letter_j: return 0x006A
+        .combining_macron_below: return 0x0331
+        _: trap("VERIFY_NOT_REACHED")
+
+## Ported from Build/Libraries/LibWeb/HTML/Parser/NamedCharacterReferences.cpp:6177 Web::HTML::named_character_reference_codepoints_from_unique_index.
+## Note: The unique index is 1-based.
+pub func named_character_reference_codepoints_from_unique_index(unique_index: u16) -> NamedCharacterReferenceCodepoints?:
+    if unique_index == 0: return none
+    return g_named_character_reference_codepoints_lookup[unique_index - 1]
+
+# mark: Entities.cpp ============================================================================
+
+# AK::popcount (AK/BuiltinWrappers.h) for a u64.
+func popcount_u64(value: u64) -> u8:
+    var count: u8 = 0
+    var bits = value
+    while bits != 0:
+        bits = bits & (bits - 1)
+        count += 1
+    return count
+
+## Ported from Libraries/LibWeb/HTML/Parser/Entities.cpp:15 Web::HTML::ascii_alphabetic_to_index.
+func ascii_alphabetic_to_index(c_: u8) -> u8:
+    assert(ak.is_ascii_alpha(c_))
+    return (c_ - 'A') if c_ <= 'Z' else (c_ - 'a' + 26)
+
+## Ported from Libraries/LibWeb/HTML/Parser/Entities.h:22 Web::HTML::NamedCharacterReferenceMatcher::try_consume_code_point.
+## If `c` is the codepoint of a child of the current `node_index`, the `node_index`
+## is updated to that child and the function returns `true`.
+## Otherwise, the `node_index` is unchanged and the function returns false.
+pub func named_character_reference_matcher_try_consume_code_point(this: NamedCharacterReferenceMatcher*, c_: u32) -> bool:
+    if c_ > 0x7F:
+        return false
+    return named_character_reference_matcher_try_consume_ascii_char(this, (u8)c_)
+
+## Ported from Libraries/LibWeb/HTML/Parser/Entities.cpp:21 Web::HTML::NamedCharacterReferenceMatcher::try_consume_ascii_char.
+## If `c` is the character of a child of the current `node_index`, the `node_index`
+## is updated to that child and the function returns `true`.
+## Otherwise, the `node_index` is unchanged and the function returns false.
+pub func named_character_reference_matcher_try_consume_ascii_char(this: NamedCharacterReferenceMatcher*, c_: u8) -> bool:
+    match this.m_search_state_tag:
+        .init:
+            if not ak.is_ascii_alpha(c_):
+                return false
+            let index = ascii_alphabetic_to_index(c_)
+            this.m_search_state_tag = NamedCharacterReferenceMatcherSearchStateTag.first_to_second_layer
+            this.m_search_state.first_to_second_layer = g_named_character_reference_first_to_second_layer[index]
+            this.m_pending_unique_index = g_named_character_reference_first_layer[index].number
+            this.m_overconsumed_code_points += 1
+            return true
+        .first_to_second_layer:
+            if not ak.is_ascii_alpha(c_):
+                return false
+            let bit_index = ascii_alphabetic_to_index(c_)
+            if ((1u64 << bit_index) & this.m_search_state.first_to_second_layer.mask) == 0:
+                return false
+
+            # Get the second layer node by re-using the first_to_second_layer.mask.
+            # For example, if the first character is 'n' and the second character is 'o':
+            #
+            # This is the first_to_second_layer.mask when the first character is 'n':
+            # 0001111110110110111111111100001000100000100001000000
+            #            └ bit_index of 'o'
+            #
+            # Create a mask where all of the less significant bits than the
+            # bit index of the current character ('o') are set:
+            # 0000000000001111111111111111111111111111111111111111
+            #            └ bit_index of 'o'
+            #
+            # Bitwise AND this new mask with the first_to_second_layer.mask
+            # to get only the set bits less significant than the bit index of the
+            # current character:
+            # 0000000000000110111111111100001000100000100001000000
+            #
+            # Take the popcount of this to get the index of the node within the
+            # second layer. In this case, there are 16 bits set, so the index
+            # of 'o' in the second layer is first_to_second_layer.second_layer_offset + 16.
+            let mask: u64 = (1u64 << bit_index) - 1
+            let char_index = popcount_u64(this.m_search_state.first_to_second_layer.mask & mask)
+            let node = g_named_character_reference_second_layer[this.m_search_state.first_to_second_layer.second_layer_offset + char_index]
+
+            this.m_pending_unique_index += node.number
+            this.m_overconsumed_code_points += 1
+            if node.end_of_word:
+                this.m_pending_unique_index += 1
+                this.m_last_matched_unique_index = this.m_pending_unique_index
+                this.m_ends_with_semicolon = c_ == ';'
+                this.m_overconsumed_code_points = 0
+            this.m_search_state_tag = NamedCharacterReferenceMatcherSearchStateTag.dafsa_children
+            this.m_search_state.dafsa_children = named_character_reference_children(node.child_index, node.children_len)
+            return true
+        .dafsa_children:
+            for node in this.m_search_state.dafsa_children:
+                if node.character == c_:
+                    this.m_pending_unique_index += node.number
+                    this.m_overconsumed_code_points += 1
+                    if node.end_of_word:
+                        this.m_pending_unique_index += 1
+                        this.m_last_matched_unique_index = this.m_pending_unique_index
+                        this.m_ends_with_semicolon = c_ == ';'
+                        this.m_overconsumed_code_points = 0
+                    this.m_search_state.dafsa_children = named_character_reference_children(node.child_index, node.children_len)
+                    return true
+            return false
+        _: trap("VERIFY_NOT_REACHED")
+
+# { &g_named_character_reference_nodes[child_index], children_len }: a node's list of children.
+func named_character_reference_children(child_index: u16, children_len: u16) -> const NamedCharacterReferenceNode[]:
+    return g_named_character_reference_nodes[child_index..<child_index + children_len]
+
+## Ported from Libraries/LibWeb/HTML/Parser/Entities.h:35 Web::HTML::NamedCharacterReferenceMatcher::code_points.
+## Returns the code points associated with the last match, if any.
+pub func named_character_reference_matcher_code_points(this: const NamedCharacterReferenceMatcher*) -> NamedCharacterReferenceCodepoints?:
+    return named_character_reference_codepoints_from_unique_index(this.m_last_matched_unique_index)
+
+## Ported from Libraries/LibWeb/HTML/Parser/Entities.h:37 Web::HTML::NamedCharacterReferenceMatcher::last_match_ends_with_semicolon.
+pub func named_character_reference_matcher_last_match_ends_with_semicolon(this: const NamedCharacterReferenceMatcher*) -> bool:
+    return this.m_ends_with_semicolon
+
+## Ported from Libraries/LibWeb/HTML/Parser/Entities.h:39 Web::HTML::NamedCharacterReferenceMatcher::overconsumed_code_points.
+pub func named_character_reference_matcher_overconsumed_code_points(this: const NamedCharacterReferenceMatcher*) -> u8:
+    return this.m_overconsumed_code_points

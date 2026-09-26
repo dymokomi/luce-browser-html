@@ -1,0 +1,430 @@
+#==============================================================================================
+#
+#   html_tokenizer_1 - HTMLTokenizer: the input stream and next_token's loop
+#
+#   DESCRIPTION:
+#       Port of Libraries/LibWeb/HTML/Parser/HTMLTokenizer.cpp (lines 1-319 and 2875-2879):
+#       the state machine's macros, the input stream (lines 193-297) and next_token's frame.
+#
+#       next_token is one function with a label per state in C++, reached by `goto` from the
+#       macros. luce-base has no goto (language §8.6), so the frame is three nested loops and
+#       each state is a function of its own (html_tokenizer_2 to html_tokenizer_8) that answers
+#       a TokenizerStep saying which loop to continue:
+#
+#       - `goto _StartOfFunction` (SWITCH_TO_RETURN_STATE, RECONSUME_IN_RETURN_STATE) continues
+#         the outer loop, which hands out a queued token first;
+#       - `continue;` and SWITCH_TO continue the `for (;;)` loop, which pauses when the input
+#         runs out and otherwise consumes the next input character (SWITCH_TO's own pause check
+#         and CONSUME_NEXT_INPUT_CHARACTER are exactly that loop's head);
+#       - RECONSUME_IN and EMIT_CHARACTER_AND_RECONSUME_IN (`goto new_state`) continue the
+#         innermost loop, which runs m_state again on the same input character;
+#       - `return` returns.
+#
+#       Each macro is a function of the same name that updates the tokenizer as the macro does
+#       and answers the step (tokenizer_switch_to for SWITCH_TO, ...). The ON_* conditions are
+#       the functions `on`, `on_eof`, `on_ascii_alpha`, ....
+#
+#==============================================================================================
+
+## AK/Debug.h TOKENIZER_TRACE_DEBUG (0 in the donor build): the dbgln_if messages.
+let tokenizer_trace_debug: bool = false
+
+# mark: The state machine's macros ==============================================================
+
+## Where next_token goes after a state has run: the targets of the C++ macros' `goto`,
+## `continue` and `return`.
+enum TokenizerStep:
+    ## `return token;` from next_token.
+    returned(token: HtmlToken?)
+    ## `continue;` and SWITCH_TO: pause if the input ran out, else consume the next input
+    ## character and run m_state.
+    consume_next
+    ## RECONSUME_IN (`goto new_state;`): run m_state on the same input character.
+    reconsume
+    ## `goto _StartOfFunction;`: hand out a queued token, else consume the next input character.
+    start_of_function
+
+# The value of current_input_character where the C++ reads current_input_character.value().
+func input_value(current_input_character: u32?) -> u32:
+    return current_input_character else trap("VERIFY: current_input_character.has_value()")
+
+# `m_queued_tokens.enqueue(move(m_current_token))`: the token goes to the queue, and the
+# moved-from current token no longer owns its attribute list or DOCTYPE data (its OwnPtr is
+# null), so later changes to the current token cannot reach the queued one.
+func html_tokenizer_move_current_token(this: HtmlTokenizer*) -> HtmlToken:
+    let token = this.m_current_token
+    match this.m_current_token.m_data:
+        .html_token_doctype_data(_): this.m_current_token.m_data = .html_token_doctype_data(value = none)
+        .vector_html_token_attribute(_): this.m_current_token.m_data = .vector_html_token_attribute(value = none)
+        _: discard(0)
+    return token
+
+# SWITCH_TO(new_state)
+func tokenizer_switch_to(this: HtmlTokenizer*, new_state: HtmlTokenizerState) -> TokenizerStep:
+    assert(ak.string_builder_is_empty(&this.m_current_builder))
+    return tokenizer_switch_to_with_unclean_builder(this, new_state)
+
+# SWITCH_TO_WITH_UNCLEAN_BUILDER(new_state): the pause check and CONSUME_NEXT_INPUT_CHARACTER
+# are the head of next_token's `for (;;)` loop.
+func tokenizer_switch_to_with_unclean_builder(this: HtmlTokenizer*, new_state: HtmlTokenizerState) -> TokenizerStep:
+    html_tokenizer_will_switch_to(this, new_state)
+    this.m_state = new_state
+    return TokenizerStep.consume_next
+
+# RECONSUME_IN(new_state)
+func tokenizer_reconsume_in(this: HtmlTokenizer*, new_state: HtmlTokenizerState) -> TokenizerStep:
+    html_tokenizer_will_reconsume_in(this, new_state)
+    this.m_state = new_state
+    return TokenizerStep.reconsume
+
+# SWITCH_TO_RETURN_STATE
+func tokenizer_switch_to_return_state(this: HtmlTokenizer*) -> TokenizerStep:
+    html_tokenizer_will_switch_to(this, this.m_return_state)
+    this.m_state = this.m_return_state
+    return TokenizerStep.start_of_function
+
+# RECONSUME_IN_RETURN_STATE
+func tokenizer_reconsume_in_return_state(this: HtmlTokenizer*, current_input_character: u32?) -> TokenizerStep:
+    html_tokenizer_will_reconsume_in(this, this.m_return_state)
+    this.m_state = this.m_return_state
+    if current_input_character != none:
+        html_tokenizer_restore_to(this, this.m_prev_offset)
+    return TokenizerStep.start_of_function
+
+# SWITCH_TO_AND_EMIT_CURRENT_TOKEN(new_state)
+func tokenizer_switch_to_and_emit_current_token(this: HtmlTokenizer*, new_state: HtmlTokenizerState) -> TokenizerStep:
+    assert(ak.string_builder_is_empty(&this.m_current_builder))
+    html_tokenizer_will_switch_to(this, new_state)
+    this.m_state = new_state
+    html_tokenizer_will_emit(this, &this.m_current_token)
+    ak.queue_enqueue(&this.m_queued_tokens, html_tokenizer_move_current_token(this))
+    return .returned(token = ak.queue_dequeue(&this.m_queued_tokens))
+
+# EMIT_CHARACTER_AND_RECONSUME_IN(code_point, new_state)
+func tokenizer_emit_character_and_reconsume_in(this: HtmlTokenizer*, code_point: u32, new_state: HtmlTokenizerState) -> TokenizerStep:
+    ak.queue_enqueue(&this.m_queued_tokens, html_token_make_character(code_point))
+    html_tokenizer_will_reconsume_in(this, new_state)
+    this.m_state = new_state
+    return TokenizerStep.reconsume
+
+# FLUSH_CODEPOINTS_CONSUMED_AS_A_CHARACTER_REFERENCE
+func tokenizer_flush_codepoints_consumed_as_a_character_reference(this: HtmlTokenizer*):
+    for code_point in ak.vector_span(&this.m_temporary_buffer):
+        if html_tokenizer_consumed_as_part_of_an_attribute(this):
+            ak.string_builder_append_code_point(&this.m_current_builder, code_point)
+        else:
+            html_tokenizer_create_new_token(this, HtmlTokenType.character)
+            html_token_set_code_point(&this.m_current_token, code_point)
+            ak.queue_enqueue(&this.m_queued_tokens, html_tokenizer_move_current_token(this))
+
+# DONT_CONSUME_NEXT_INPUT_CHARACTER
+func tokenizer_dont_consume_next_input_character(this: HtmlTokenizer*, current_input_character: u32?):
+    if current_input_character != none:
+        html_tokenizer_restore_to(this, this.m_prev_offset)
+
+# ON(code_point): every use in the donor passes an ASCII character or 0.
+func on(current_input_character: u32?, code_point: u8) -> bool:
+    if let value = current_input_character:
+        return value == code_point
+    return false
+
+# ON_EOF
+func on_eof(current_input_character: u32?) -> bool:
+    return current_input_character == none
+
+# ON_ASCII_ALPHA
+func on_ascii_alpha(current_input_character: u32?) -> bool:
+    if let value = current_input_character:
+        return ak.is_ascii_alpha(value)
+    return false
+
+# ON_ASCII_ALPHANUMERIC
+func on_ascii_alphanumeric(current_input_character: u32?) -> bool:
+    if let value = current_input_character:
+        return ak.is_ascii_alphanumeric(value)
+    return false
+
+# ON_ASCII_UPPER_ALPHA
+func on_ascii_upper_alpha(current_input_character: u32?) -> bool:
+    if let value = current_input_character:
+        return ak.is_ascii_upper_alpha(value)
+    return false
+
+# ON_ASCII_LOWER_ALPHA
+func on_ascii_lower_alpha(current_input_character: u32?) -> bool:
+    if let value = current_input_character:
+        return ak.is_ascii_lower_alpha(value)
+    return false
+
+# ON_ASCII_DIGIT
+func on_ascii_digit(current_input_character: u32?) -> bool:
+    if let value = current_input_character:
+        return ak.is_ascii_digit(value)
+    return false
+
+# ON_ASCII_HEX_DIGIT
+func on_ascii_hex_digit(current_input_character: u32?) -> bool:
+    if let value = current_input_character:
+        return ak.is_ascii_hex_digit(value)
+    return false
+
+# ON_WHITESPACE: first_is_one_of(static_cast<char>(c), '\t', '\n', '\f', ' ') of an ASCII c.
+func on_whitespace(current_input_character: u32?) -> bool:
+    if let value = current_input_character:
+        if not ak.is_ascii(value):
+            return false
+        return value == (u32)'\t' or value == (u32)'\n' or value == 0x0C or value == (u32)' '
+    return false
+
+# EMIT_EOF
+func tokenizer_emit_eof(this: HtmlTokenizer*) -> TokenizerStep:
+    if this.m_has_emitted_eof:
+        return .returned(token = none)
+    this.m_has_emitted_eof = true
+    html_tokenizer_create_new_token(this, HtmlTokenType.end_of_file)
+    html_tokenizer_will_emit(this, &this.m_current_token)
+    ak.queue_enqueue(&this.m_queued_tokens, html_tokenizer_move_current_token(this))
+    return .returned(token = ak.queue_dequeue(&this.m_queued_tokens))
+
+# EMIT_CURRENT_TOKEN_FOLLOWED_BY_EOF
+func tokenizer_emit_current_token_followed_by_eof(this: HtmlTokenizer*) -> TokenizerStep:
+    assert(ak.string_builder_is_empty(&this.m_current_builder))
+    html_tokenizer_will_emit(this, &this.m_current_token)
+    ak.queue_enqueue(&this.m_queued_tokens, html_tokenizer_move_current_token(this))
+
+    this.m_has_emitted_eof = true
+    html_tokenizer_create_new_token(this, HtmlTokenType.end_of_file)
+    html_tokenizer_will_emit(this, &this.m_current_token)
+    ak.queue_enqueue(&this.m_queued_tokens, html_tokenizer_move_current_token(this))
+
+    return .returned(token = ak.queue_dequeue(&this.m_queued_tokens))
+
+# EMIT_CHARACTER(code_point)
+func tokenizer_emit_character(this: HtmlTokenizer*, code_point: u32) -> TokenizerStep:
+    html_tokenizer_create_new_token(this, HtmlTokenType.character)
+    html_token_set_code_point(&this.m_current_token, code_point)
+    ak.queue_enqueue(&this.m_queued_tokens, html_tokenizer_move_current_token(this))
+    return .returned(token = ak.queue_dequeue(&this.m_queued_tokens))
+
+# EMIT_CURRENT_CHARACTER
+func tokenizer_emit_current_character(this: HtmlTokenizer*, current_input_character: u32?) -> TokenizerStep:
+    return tokenizer_emit_character(this, input_value(current_input_character))
+
+# SWITCH_TO_AND_EMIT_CHARACTER(code_point, new_state)
+func tokenizer_switch_to_and_emit_character(this: HtmlTokenizer*, code_point: u32, new_state: HtmlTokenizerState) -> TokenizerStep:
+    html_tokenizer_will_switch_to(this, new_state)
+    this.m_state = new_state
+    return tokenizer_emit_character(this, code_point)
+
+# SWITCH_TO_AND_EMIT_CURRENT_CHARACTER(new_state)
+func tokenizer_switch_to_and_emit_current_character(this: HtmlTokenizer*, current_input_character: u32?, new_state: HtmlTokenizerState) -> TokenizerStep:
+    return tokenizer_switch_to_and_emit_character(this, input_value(current_input_character), new_state)
+
+# mark: The input stream ========================================================================
+
+## Ported from Libraries/LibWeb/HTML/Parser/HTMLTokenizer.cpp:193 Web::HTML::log_parse_error.
+# The C++ default argument SourceLocation::current() is the caller's luce.location.
+func log_parse_error(location: Location = luce.location):
+    if tokenizer_trace_debug:
+        ak.dbgln(f"Parse error (tokenization) [{location.function} @ {location.file}:{location.line}]")
+
+## Ported from Libraries/LibWeb/HTML/Parser/HTMLTokenizer.cpp:198 Web::HTML::HTMLTokenizer::should_pause_before_next_input_character.
+pub func html_tokenizer_should_pause_before_next_input_character(this: const HtmlTokenizer*, stop_at_insertion_point: HtmlTokenizerStopAtInsertionPoint) -> bool:
+    if stop_at_insertion_point == HtmlTokenizerStopAtInsertionPoint.yes:
+        if let insertion_point = this.m_insertion_point:
+            if this.m_current_offset >= insertion_point:
+                return true
+
+            if this.m_current_offset < (isize)ak.vector_size(&this.m_decoded_input) and *ak.vector_at_const(&this.m_decoded_input, (usize)this.m_current_offset) == (u32)'\r' and this.m_current_offset + 1 == insertion_point:
+                # Newline normalization needs one code point of lookahead for CRLF. If document.write()
+                # stops the tokenizer immediately after a CR, wait for more input before deciding whether
+                # it is a CRLF pair or a standalone CR.
+                return true
+
+    if this.m_input_stream_closed:
+        return false
+
+    if this.m_current_offset >= (isize)ak.vector_size(&this.m_decoded_input):
+        return true
+
+    # Newline normalization needs one code point of lookahead for CRLF. If a network chunk ends in
+    # CR, wait for either another code point or the input stream close before deciding whether it is
+    # a CRLF pair or a standalone CR.
+    return *ak.vector_at_const(&this.m_decoded_input, (usize)this.m_current_offset) == (u32)'\r' and this.m_current_offset + 1 >= (isize)ak.vector_size(&this.m_decoded_input)
+
+## Ported from Libraries/LibWeb/HTML/Parser/HTMLTokenizer.cpp:226 Web::HTML::HTMLTokenizer::can_run_out_of_characters.
+pub func html_tokenizer_can_run_out_of_characters(this: const HtmlTokenizer*, stop_at_insertion_point: HtmlTokenizerStopAtInsertionPoint) -> bool:
+    return (stop_at_insertion_point == HtmlTokenizerStopAtInsertionPoint.yes and this.m_insertion_point != none) or not this.m_input_stream_closed
+
+## Ported from Libraries/LibWeb/HTML/Parser/HTMLTokenizer.cpp:232 Web::HTML::HTMLTokenizer::next_code_point.
+pub func html_tokenizer_next_code_point(this: HtmlTokenizer*, stop_at_insertion_point: HtmlTokenizerStopAtInsertionPoint) -> u32?:
+    if this.m_current_offset >= (isize)ak.vector_size(&this.m_decoded_input):
+        return none
+
+    var code_point: u32
+    # https://html.spec.whatwg.org/multipage/parsing.html#preprocessing-the-input-stream:tokenization
+    # https://infra.spec.whatwg.org/#normalize-newlines
+    if (html_tokenizer_peek_code_point(this, 0, stop_at_insertion_point) else 0) == (u32)'\r' and (html_tokenizer_peek_code_point(this, 1, stop_at_insertion_point) else 0) == (u32)'\n':
+        # replace every U+000D CR U+000A LF code point pair with a single U+000A LF code point,
+        html_tokenizer_skip(this, 2)
+        code_point = (u32)'\n'
+    elif (html_tokenizer_peek_code_point(this, 0, stop_at_insertion_point) else 0) == (u32)'\r':
+        # replace every remaining U+000D CR code point with a U+000A LF code point.
+        html_tokenizer_skip(this, 1)
+        code_point = (u32)'\n'
+    else:
+        html_tokenizer_skip(this, 1)
+        code_point = *ak.vector_at(&this.m_decoded_input, (usize)this.m_prev_offset)
+
+    if tokenizer_trace_debug:
+        ak.dbgln(f"(Tokenizer) Next code_point: {code_point}")
+    return code_point
+
+## Ported from Libraries/LibWeb/HTML/Parser/HTMLTokenizer.cpp:257 Web::HTML::HTMLTokenizer::skip.
+pub func html_tokenizer_skip(this: HtmlTokenizer*, count: usize):
+    assert(count > 0)
+    if not ak.vector_is_empty(&this.m_source_positions):
+        ak.vector_append_t(&this.m_source_positions, *ak.vector_last(&this.m_source_positions))
+    for i in 0..<count:
+        discard(i)
+        this.m_prev_offset = this.m_current_offset
+        let code_point = *ak.vector_at(&this.m_decoded_input, (usize)this.m_current_offset)
+        if not ak.vector_is_empty(&this.m_source_positions):
+            let last = ak.vector_last(&this.m_source_positions)
+            if code_point == (u32)'\n':
+                last.column = 0
+                last.line += 1
+            else:
+                last.column += 1
+        this.m_current_offset += 1
+
+## Ported from Libraries/LibWeb/HTML/Parser/HTMLTokenizer.cpp:277 Web::HTML::HTMLTokenizer::peek_code_point.
+pub func html_tokenizer_peek_code_point(this: const HtmlTokenizer*, offset: isize, stop_at_insertion_point: HtmlTokenizerStopAtInsertionPoint) -> u32?:
+    let it = this.m_current_offset + offset
+    if it >= (isize)ak.vector_size(&this.m_decoded_input):
+        return none
+    if stop_at_insertion_point == HtmlTokenizerStopAtInsertionPoint.yes:
+        if let insertion_point = this.m_insertion_point:
+            if it >= insertion_point:
+                return none
+    return *ak.vector_at_const(&this.m_decoded_input, (usize)it)
+
+## Ported from Libraries/LibWeb/HTML/Parser/HTMLTokenizer.cpp:290 Web::HTML::HTMLTokenizer::nth_last_position.
+pub func html_tokenizer_nth_last_position(this: HtmlTokenizer*, n: usize = 0) -> HtmlTokenPosition:
+    if n + 1 > ak.vector_size(&this.m_source_positions):
+        if tokenizer_trace_debug:
+            ak.dbgln(f"(Tokenizer::nth_last_position) Invalid position requested: {n}th-last of {ak.vector_size(&this.m_source_positions)}. Returning (0-0).")
+        return HtmlTokenPosition(line = 0, column = 0)
+    return *ak.vector_at(&this.m_source_positions, ak.vector_size(&this.m_source_positions) - 1 - n)
+
+# mark: next_token ==============================================================================
+
+## Ported from Libraries/LibWeb/HTML/Parser/HTMLTokenizer.cpp:299 Web::HTML::HTMLTokenizer::next_token.
+pub func html_tokenizer_next_token(this: HtmlTokenizer*, stop_at_insertion_point: HtmlTokenizerStopAtInsertionPoint = HtmlTokenizerStopAtInsertionPoint.no) -> HtmlToken?:
+    if not ak.vector_is_empty(&this.m_source_positions):
+        let last_position = *ak.vector_last(&this.m_source_positions)
+        ak.vector_clear_with_capacity(&this.m_source_positions)
+        ak.vector_append_t(&this.m_source_positions, last_position)
+    start_of_function: while true:
+        if not ak.queue_is_empty(&this.m_queued_tokens):
+            return ak.queue_dequeue(&this.m_queued_tokens)
+
+        if this.m_aborted:
+            return none
+
+        consume_next: while true:
+            if html_tokenizer_should_pause_before_next_input_character(this, stop_at_insertion_point):
+                return none
+
+            let current_input_character = html_tokenizer_next_code_point(this, stop_at_insertion_point)
+            reconsume: while true:
+                match html_tokenizer_run_state(this, current_input_character, stop_at_insertion_point):
+                    .returned(token): return token
+                    .consume_next: continue consume_next
+                    .reconsume: continue reconsume
+                    .start_of_function: continue start_of_function
+
+# `switch (m_state)`: each state's code is the function html_tokenizer_<state>_state.
+func html_tokenizer_run_state(this: HtmlTokenizer*, current_input_character: u32?, stop_at_insertion_point: HtmlTokenizerStopAtInsertionPoint) -> TokenizerStep:
+    match this.m_state:
+        .data: return html_tokenizer_data_state(this, current_input_character, stop_at_insertion_point)
+        .rcdata: return html_tokenizer_rcdata_state(this, current_input_character, stop_at_insertion_point)
+        .rawtext: return html_tokenizer_rawtext_state(this, current_input_character, stop_at_insertion_point)
+        .script_data: return html_tokenizer_script_data_state(this, current_input_character, stop_at_insertion_point)
+        .plaintext: return html_tokenizer_plaintext_state(this, current_input_character, stop_at_insertion_point)
+        .tag_open: return html_tokenizer_tag_open_state(this, current_input_character, stop_at_insertion_point)
+        .end_tag_open: return html_tokenizer_end_tag_open_state(this, current_input_character, stop_at_insertion_point)
+        .tag_name: return html_tokenizer_tag_name_state(this, current_input_character, stop_at_insertion_point)
+        .rcdata_less_than_sign: return html_tokenizer_rcdata_less_than_sign_state(this, current_input_character, stop_at_insertion_point)
+        .rcdata_end_tag_open: return html_tokenizer_rcdata_end_tag_open_state(this, current_input_character, stop_at_insertion_point)
+        .rcdata_end_tag_name: return html_tokenizer_rcdata_end_tag_name_state(this, current_input_character, stop_at_insertion_point)
+        .rawtext_less_than_sign: return html_tokenizer_rawtext_less_than_sign_state(this, current_input_character, stop_at_insertion_point)
+        .rawtext_end_tag_open: return html_tokenizer_rawtext_end_tag_open_state(this, current_input_character, stop_at_insertion_point)
+        .rawtext_end_tag_name: return html_tokenizer_rawtext_end_tag_name_state(this, current_input_character, stop_at_insertion_point)
+        .script_data_less_than_sign: return html_tokenizer_script_data_less_than_sign_state(this, current_input_character, stop_at_insertion_point)
+        .script_data_end_tag_open: return html_tokenizer_script_data_end_tag_open_state(this, current_input_character, stop_at_insertion_point)
+        .script_data_end_tag_name: return html_tokenizer_script_data_end_tag_name_state(this, current_input_character, stop_at_insertion_point)
+        .script_data_escape_start: return html_tokenizer_script_data_escape_start_state(this, current_input_character, stop_at_insertion_point)
+        .script_data_escape_start_dash: return html_tokenizer_script_data_escape_start_dash_state(this, current_input_character, stop_at_insertion_point)
+        .script_data_escaped: return html_tokenizer_script_data_escaped_state(this, current_input_character, stop_at_insertion_point)
+        .script_data_escaped_dash: return html_tokenizer_script_data_escaped_dash_state(this, current_input_character, stop_at_insertion_point)
+        .script_data_escaped_dash_dash: return html_tokenizer_script_data_escaped_dash_dash_state(this, current_input_character, stop_at_insertion_point)
+        .script_data_escaped_less_than_sign: return html_tokenizer_script_data_escaped_less_than_sign_state(this, current_input_character, stop_at_insertion_point)
+        .script_data_escaped_end_tag_open: return html_tokenizer_script_data_escaped_end_tag_open_state(this, current_input_character, stop_at_insertion_point)
+        .script_data_escaped_end_tag_name: return html_tokenizer_script_data_escaped_end_tag_name_state(this, current_input_character, stop_at_insertion_point)
+        .script_data_double_escape_start: return html_tokenizer_script_data_double_escape_start_state(this, current_input_character, stop_at_insertion_point)
+        .script_data_double_escaped: return html_tokenizer_script_data_double_escaped_state(this, current_input_character, stop_at_insertion_point)
+        .script_data_double_escaped_dash: return html_tokenizer_script_data_double_escaped_dash_state(this, current_input_character, stop_at_insertion_point)
+        .script_data_double_escaped_dash_dash: return html_tokenizer_script_data_double_escaped_dash_dash_state(this, current_input_character, stop_at_insertion_point)
+        .script_data_double_escaped_less_than_sign: return html_tokenizer_script_data_double_escaped_less_than_sign_state(this, current_input_character, stop_at_insertion_point)
+        .script_data_double_escape_end: return html_tokenizer_script_data_double_escape_end_state(this, current_input_character, stop_at_insertion_point)
+        .before_attribute_name: return html_tokenizer_before_attribute_name_state(this, current_input_character, stop_at_insertion_point)
+        .attribute_name: return html_tokenizer_attribute_name_state(this, current_input_character, stop_at_insertion_point)
+        .after_attribute_name: return html_tokenizer_after_attribute_name_state(this, current_input_character, stop_at_insertion_point)
+        .before_attribute_value: return html_tokenizer_before_attribute_value_state(this, current_input_character, stop_at_insertion_point)
+        .attribute_value_double_quoted: return html_tokenizer_attribute_value_double_quoted_state(this, current_input_character, stop_at_insertion_point)
+        .attribute_value_single_quoted: return html_tokenizer_attribute_value_single_quoted_state(this, current_input_character, stop_at_insertion_point)
+        .attribute_value_unquoted: return html_tokenizer_attribute_value_unquoted_state(this, current_input_character, stop_at_insertion_point)
+        .after_attribute_value_quoted: return html_tokenizer_after_attribute_value_quoted_state(this, current_input_character, stop_at_insertion_point)
+        .self_closing_start_tag: return html_tokenizer_self_closing_start_tag_state(this, current_input_character, stop_at_insertion_point)
+        .bogus_comment: return html_tokenizer_bogus_comment_state(this, current_input_character, stop_at_insertion_point)
+        .markup_declaration_open: return html_tokenizer_markup_declaration_open_state(this, current_input_character, stop_at_insertion_point)
+        .comment_start: return html_tokenizer_comment_start_state(this, current_input_character, stop_at_insertion_point)
+        .comment_start_dash: return html_tokenizer_comment_start_dash_state(this, current_input_character, stop_at_insertion_point)
+        .comment: return html_tokenizer_comment_state(this, current_input_character, stop_at_insertion_point)
+        .comment_less_than_sign: return html_tokenizer_comment_less_than_sign_state(this, current_input_character, stop_at_insertion_point)
+        .comment_less_than_sign_bang: return html_tokenizer_comment_less_than_sign_bang_state(this, current_input_character, stop_at_insertion_point)
+        .comment_less_than_sign_bang_dash: return html_tokenizer_comment_less_than_sign_bang_dash_state(this, current_input_character, stop_at_insertion_point)
+        .comment_less_than_sign_bang_dash_dash: return html_tokenizer_comment_less_than_sign_bang_dash_dash_state(this, current_input_character, stop_at_insertion_point)
+        .comment_end_dash: return html_tokenizer_comment_end_dash_state(this, current_input_character, stop_at_insertion_point)
+        .comment_end: return html_tokenizer_comment_end_state(this, current_input_character, stop_at_insertion_point)
+        .comment_end_bang: return html_tokenizer_comment_end_bang_state(this, current_input_character, stop_at_insertion_point)
+        .doctype: return html_tokenizer_doctype_state(this, current_input_character, stop_at_insertion_point)
+        .before_doctype_name: return html_tokenizer_before_doctype_name_state(this, current_input_character, stop_at_insertion_point)
+        .doctype_name: return html_tokenizer_doctype_name_state(this, current_input_character, stop_at_insertion_point)
+        .after_doctype_name: return html_tokenizer_after_doctype_name_state(this, current_input_character, stop_at_insertion_point)
+        .after_doctype_public_keyword: return html_tokenizer_after_doctype_public_keyword_state(this, current_input_character, stop_at_insertion_point)
+        .before_doctype_public_identifier: return html_tokenizer_before_doctype_public_identifier_state(this, current_input_character, stop_at_insertion_point)
+        .doctype_public_identifier_double_quoted: return html_tokenizer_doctype_public_identifier_double_quoted_state(this, current_input_character, stop_at_insertion_point)
+        .doctype_public_identifier_single_quoted: return html_tokenizer_doctype_public_identifier_single_quoted_state(this, current_input_character, stop_at_insertion_point)
+        .after_doctype_public_identifier: return html_tokenizer_after_doctype_public_identifier_state(this, current_input_character, stop_at_insertion_point)
+        .between_doctype_public_and_system_identifiers: return html_tokenizer_between_doctype_public_and_system_identifiers_state(this, current_input_character, stop_at_insertion_point)
+        .after_doctype_system_keyword: return html_tokenizer_after_doctype_system_keyword_state(this, current_input_character, stop_at_insertion_point)
+        .before_doctype_system_identifier: return html_tokenizer_before_doctype_system_identifier_state(this, current_input_character, stop_at_insertion_point)
+        .doctype_system_identifier_double_quoted: return html_tokenizer_doctype_system_identifier_double_quoted_state(this, current_input_character, stop_at_insertion_point)
+        .doctype_system_identifier_single_quoted: return html_tokenizer_doctype_system_identifier_single_quoted_state(this, current_input_character, stop_at_insertion_point)
+        .after_doctype_system_identifier: return html_tokenizer_after_doctype_system_identifier_state(this, current_input_character, stop_at_insertion_point)
+        .bogus_doctype: return html_tokenizer_bogus_doctype_state(this, current_input_character, stop_at_insertion_point)
+        .cdata_section: return html_tokenizer_cdata_section_state(this, current_input_character, stop_at_insertion_point)
+        .cdata_section_bracket: return html_tokenizer_cdata_section_bracket_state(this, current_input_character, stop_at_insertion_point)
+        .cdata_section_end: return html_tokenizer_cdata_section_end_state(this, current_input_character, stop_at_insertion_point)
+        .character_reference: return html_tokenizer_character_reference_state(this, current_input_character, stop_at_insertion_point)
+        .named_character_reference: return html_tokenizer_named_character_reference_state(this, current_input_character, stop_at_insertion_point)
+        .ambiguous_ampersand: return html_tokenizer_ambiguous_ampersand_state(this, current_input_character, stop_at_insertion_point)
+        .numeric_character_reference: return html_tokenizer_numeric_character_reference_state(this, current_input_character, stop_at_insertion_point)
+        .hexadecimal_character_reference_start: return html_tokenizer_hexadecimal_character_reference_start_state(this, current_input_character, stop_at_insertion_point)
+        .decimal_character_reference_start: return html_tokenizer_decimal_character_reference_start_state(this, current_input_character, stop_at_insertion_point)
+        .hexadecimal_character_reference: return html_tokenizer_hexadecimal_character_reference_state(this, current_input_character, stop_at_insertion_point)
+        .decimal_character_reference: return html_tokenizer_decimal_character_reference_state(this, current_input_character, stop_at_insertion_point)
+        .numeric_character_reference_end: return html_tokenizer_numeric_character_reference_end_state(this, current_input_character, stop_at_insertion_point)
+        _: trap("TODO")

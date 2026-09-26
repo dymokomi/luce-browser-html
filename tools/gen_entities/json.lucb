@@ -1,0 +1,111 @@
+#==============================================================================================
+#
+#   json - the reader of Entities.json
+#
+#   DESCRIPTION:
+#       Entities.json is one JSON object mapping each name ("&AElig;") to an object with its
+#       "codepoints" (an array of one or two integers) and "characters" (a string). This reads
+#       exactly that shape, in the file's order (the Python generator's dict order), and fails
+#       with invalid_entities on anything else. The "characters" strings are skipped.
+#
+#==============================================================================================
+
+## One named character reference: its name, with the leading '&', and its code points.
+struct Entity:
+    var name: str
+    var codepoints: u32[2]
+    var codepoint_count: usize
+
+## A cursor over the JSON text.
+struct JsonReader:
+    var text: const u8[]
+    var position: usize
+
+    mutating func skip_whitespace():
+        while self.position < self.text.length:
+            let byte = self.text[self.position]
+            if byte != ' ' and byte != '\n' and byte != '\r' and byte != '\t':
+                return
+            self.position += 1
+
+    ## The next byte after whitespace, not consumed; 0 at the end.
+    mutating func peek() -> u8:
+        self.skip_whitespace()
+        if self.position >= self.text.length:
+            return 0
+        return self.text[self.position]
+
+    mutating func expect(byte: u8) -> !:
+        if self.peek() != byte:
+            error(invalid_entities, "Entities.json: unexpected character")
+        self.position += 1
+
+    ## A string without escapes other than \" \\ and \uXXXX, which are skipped over: a view of
+    ## its bytes between the quotes.
+    mutating func string() -> str!:
+        try self.expect('"')
+        let start = self.position
+        while self.position < self.text.length and self.text[self.position] != '"':
+            if self.text[self.position] == '\\':
+                self.position += 1
+            self.position += 1
+        if self.position >= self.text.length:
+            error(invalid_entities, "Entities.json: unterminated string")
+        let view = (str)self.text[start..<self.position]
+        self.position += 1
+        return view
+
+    mutating func integer() -> u32!:
+        self.skip_whitespace()
+        var value: u32 = 0
+        var digits: usize = 0
+        while self.position < self.text.length and self.text[self.position] >= '0' and self.text[self.position] <= '9':
+            value = value * 10 + (u32)(self.text[self.position] - '0')
+            self.position += 1
+            digits += 1
+        if digits == 0:
+            error(invalid_entities, "Entities.json: expected a number")
+        return value
+
+## Every entity of Entities.json, in the file's order; the array is the run's.
+func parse_entities(text: const u8[]) -> Entity[]!:
+    var entities = try new Entity[4096]
+    var count: usize = 0
+    var reader = JsonReader(text = text, position = 0)
+    try reader.expect('{')
+    while reader.peek() != '}':
+        if count > 0:
+            try reader.expect(',')
+        if count == entities.length:
+            error(invalid_entities, "Entities.json: too many entities")
+        var entity = Entity(name = try reader.string(), codepoints = [0, 0], codepoint_count = 0)
+        try reader.expect(':')
+        try reader.expect('{')
+        var members: usize = 0
+        while reader.peek() != '}':
+            if members > 0:
+                try reader.expect(',')
+            let key = try reader.string()
+            try reader.expect(':')
+            if key == "codepoints":
+                try reader.expect('[')
+                while reader.peek() != ']':
+                    if entity.codepoint_count > 0:
+                        try reader.expect(',')
+                    if entity.codepoint_count == 2:
+                        error(invalid_entities, "Entities.json: more than two code points")
+                    entity.codepoints[entity.codepoint_count] = try reader.integer()
+                    entity.codepoint_count += 1
+                try reader.expect(']')
+            elif key == "characters":
+                discard(try reader.string())
+            else:
+                error(invalid_entities, "Entities.json: unexpected member")
+            members += 1
+        try reader.expect('}')
+        if entity.codepoint_count == 0:
+            error(invalid_entities, "Entities.json: an entity without code points")
+        entities[count] = entity
+        count += 1
+    try reader.expect('}')
+    return entities[..<count]

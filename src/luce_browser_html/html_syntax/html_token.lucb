@@ -1,0 +1,426 @@
+#==============================================================================================
+#
+#   html_token - HTMLToken: the tokens the HTML tokenizer emits
+#
+#   DESCRIPTION:
+#       Port of Libraries/LibWeb/HTML/Parser/HTMLToken.h (lines 1-393) and HTMLToken.cpp (lines
+#       1-106). The header's inline functions come first, in the header's order, then the two
+#       functions of the .cpp at the header's declaration points.
+#
+#       HTMLToken is move-only in C++; a Luce copy shares the attribute list and the DOCTYPE
+#       data (DESIGN.md §3.3 rule 1: moves are copies). `Optional<HTMLToken>`, a
+#       SentinelOptional over Type::Invalid in AK, is `HtmlToken?`.
+#
+#       m_data is Variant<Empty, u32, OwnPtr<DoctypeData>, OwnPtr<Vector<Attribute>>>; its get<T>
+#       is a match that traps on another alternative, as AK's VERIFY does.
+#
+#==============================================================================================
+
+# mark: Construction ============================================================================
+
+## Ported from Libraries/LibWeb/HTML/Parser/HTMLToken.h:64 Web::HTML::HTMLToken::make_character.
+pub func html_token_make_character(code_point: u32) -> HtmlToken:
+    var token: HtmlToken
+    html_token_construct(&token, HtmlTokenType.character)
+    html_token_set_code_point(&token, code_point)
+    return token
+
+## Ported from Libraries/LibWeb/HTML/Parser/HTMLToken.h:71 Web::HTML::HTMLToken::make_start_tag.
+pub func html_token_make_start_tag(tag_name: ak.FlyString) -> HtmlToken:
+    var token: HtmlToken
+    html_token_construct(&token, HtmlTokenType.start_tag)
+    html_token_set_tag_name(&token, tag_name)
+    return token
+
+## Ported from Libraries/LibWeb/HTML/Parser/HTMLToken.h:80 Web::HTML::HTMLToken::HTMLToken.
+## With `.invalid` it is also `HTMLToken() = default`.
+pub func html_token_construct(this: HtmlToken*, type_: HtmlTokenType):
+    # The default member initializers.
+    this.m_tag_self_closing = false
+    this.m_tag_self_closing_acknowledged = false
+    this.m_had_duplicate_attribute = false
+    this.m_string_data = ak.fly_string_new()
+    this.m_comment_data = ak.string_new()
+    this.m_data = EmptyOrU32OrHtmlTokenDoctypeDataOrVectorHtmlTokenAttribute.empty
+    this.m_start_position = HtmlTokenPosition()
+    this.m_end_position = HtmlTokenPosition()
+
+    this.m_type = type_
+    match this.m_type:
+        .character:
+            this.m_data = .u32_(value = 0)
+        .doctype:
+            this.m_data = .html_token_doctype_data(value = none)
+        .start_tag, .end_tag:
+            this.m_data = .vector_html_token_attribute(value = none)
+        _:
+            return
+
+## HTMLToken::Attribute {}: an attribute with the default member values (no prefix or
+## namespace, an empty name and value, zero positions).
+pub func html_token_attribute_new() -> HtmlTokenAttribute:
+    return HtmlTokenAttribute(prefix = none, local_name = ak.fly_string_new(), namespace_ = none, value = ak.string_new())
+
+# mark: Type queries ============================================================================
+
+## Ported from Libraries/LibWeb/HTML/Parser/HTMLToken.h:99 Web::HTML::HTMLToken::is_doctype.
+pub func html_token_is_doctype(this: const HtmlToken*) -> bool:
+    return this.m_type == HtmlTokenType.doctype
+
+## Ported from Libraries/LibWeb/HTML/Parser/HTMLToken.h:100 Web::HTML::HTMLToken::is_start_tag.
+pub func html_token_is_start_tag(this: const HtmlToken*) -> bool:
+    return this.m_type == HtmlTokenType.start_tag
+
+## Ported from Libraries/LibWeb/HTML/Parser/HTMLToken.h:101 Web::HTML::HTMLToken::is_end_tag.
+pub func html_token_is_end_tag(this: const HtmlToken*) -> bool:
+    return this.m_type == HtmlTokenType.end_tag
+
+## Ported from Libraries/LibWeb/HTML/Parser/HTMLToken.h:102 Web::HTML::HTMLToken::is_comment.
+pub func html_token_is_comment(this: const HtmlToken*) -> bool:
+    return this.m_type == HtmlTokenType.comment
+
+## Ported from Libraries/LibWeb/HTML/Parser/HTMLToken.h:103 Web::HTML::HTMLToken::is_character.
+pub func html_token_is_character(this: const HtmlToken*) -> bool:
+    return this.m_type == HtmlTokenType.character
+
+## Ported from Libraries/LibWeb/HTML/Parser/HTMLToken.h:104 Web::HTML::HTMLToken::is_end_of_file.
+pub func html_token_is_end_of_file(this: const HtmlToken*) -> bool:
+    return this.m_type == HtmlTokenType.end_of_file
+
+# mark: Character and comment data ==============================================================
+
+## Ported from Libraries/LibWeb/HTML/Parser/HTMLToken.h:106 Web::HTML::HTMLToken::code_point.
+pub func html_token_code_point(this: const HtmlToken*) -> u32:
+    assert(html_token_is_character(this))
+    match this.m_data:
+        .u32_(value): return value
+        _: trap("Variant::get<u32>: another alternative is held")
+
+## Ported from Libraries/LibWeb/HTML/Parser/HTMLToken.h:112 Web::HTML::HTMLToken::is_parser_whitespace.
+pub func html_token_is_parser_whitespace(this: const HtmlToken*) -> bool:
+    # NOTE: The parser considers '\r' to be whitespace, while the tokenizer does not.
+    if not html_token_is_character(this):
+        return false
+    match html_token_code_point(this):
+        0x09, 0x0A, 0x0C, 0x0D, 0x20: return true
+        _: return false
+
+## Ported from Libraries/LibWeb/HTML/Parser/HTMLToken.h:129 Web::HTML::HTMLToken::set_code_point.
+pub func html_token_set_code_point(this: HtmlToken*, code_point: u32):
+    assert(html_token_is_character(this))
+    match this.m_data:
+        .u32_(_): this.m_data = .u32_(value = code_point)
+        _: trap("Variant::get<u32>: another alternative is held")
+
+## Ported from Libraries/LibWeb/HTML/Parser/HTMLToken.h:135 Web::HTML::HTMLToken::comment.
+pub func html_token_comment(this: const HtmlToken*) -> ak.String:
+    assert(html_token_is_comment(this))
+    return this.m_comment_data
+
+## Ported from Libraries/LibWeb/HTML/Parser/HTMLToken.h:141 Web::HTML::HTMLToken::set_comment.
+pub func html_token_set_comment(this: HtmlToken*, comment: ak.String):
+    assert(html_token_is_comment(this))
+    this.m_comment_data = comment
+
+# mark: Tags ====================================================================================
+
+## Ported from Libraries/LibWeb/HTML/Parser/HTMLToken.h:147 Web::HTML::HTMLToken::tag_name.
+pub func html_token_tag_name(this: const HtmlToken*) -> ak.FlyString:
+    assert(html_token_is_start_tag(this) or html_token_is_end_tag(this))
+    return this.m_string_data
+
+## Ported from Libraries/LibWeb/HTML/Parser/HTMLToken.h:153 Web::HTML::HTMLToken::set_tag_name.
+pub func html_token_set_tag_name(this: HtmlToken*, name: ak.FlyString):
+    assert(html_token_is_start_tag(this) or html_token_is_end_tag(this))
+    this.m_string_data = name
+
+## Ported from Libraries/LibWeb/HTML/Parser/HTMLToken.h:159 Web::HTML::HTMLToken::is_self_closing.
+pub func html_token_is_self_closing(this: const HtmlToken*) -> bool:
+    assert(html_token_is_start_tag(this) or html_token_is_end_tag(this))
+    return this.m_tag_self_closing
+
+## Ported from Libraries/LibWeb/HTML/Parser/HTMLToken.h:165 Web::HTML::HTMLToken::set_self_closing.
+pub func html_token_set_self_closing(this: HtmlToken*, self_closing: bool):
+    assert(html_token_is_start_tag(this) or html_token_is_end_tag(this))
+    this.m_tag_self_closing = self_closing
+
+## Ported from Libraries/LibWeb/HTML/Parser/HTMLToken.h:171 Web::HTML::HTMLToken::has_acknowledged_self_closing_flag.
+pub func html_token_has_acknowledged_self_closing_flag(this: const HtmlToken*) -> bool:
+    assert(html_token_is_self_closing(this))
+    return this.m_tag_self_closing_acknowledged
+
+## Ported from Libraries/LibWeb/HTML/Parser/HTMLToken.h:177 Web::HTML::HTMLToken::acknowledge_self_closing_flag_if_set.
+pub func html_token_acknowledge_self_closing_flag_if_set(this: HtmlToken*):
+    if html_token_is_self_closing(this):
+        this.m_tag_self_closing_acknowledged = true
+
+# mark: Attributes ==============================================================================
+
+## Ported from Libraries/LibWeb/HTML/Parser/HTMLToken.h:183 Web::HTML::HTMLToken::has_attributes.
+pub func html_token_has_attributes(this: const HtmlToken*) -> bool:
+    assert(html_token_is_start_tag(this) or html_token_is_end_tag(this))
+    let ptr = html_token_tag_attributes_const(this)
+    if let attributes = ptr:
+        return not ak.vector_is_empty(attributes)
+    return false
+
+## Ported from Libraries/LibWeb/HTML/Parser/HTMLToken.h:190 Web::HTML::HTMLToken::attribute_count.
+pub func html_token_attribute_count(this: const HtmlToken*) -> usize:
+    assert(html_token_is_start_tag(this) or html_token_is_end_tag(this))
+    if let ptr = html_token_tag_attributes_const(this):
+        return ak.vector_size(ptr)
+    return 0
+
+## Ported from Libraries/LibWeb/HTML/Parser/HTMLToken.h:198 Web::HTML::HTMLToken::add_attribute.
+pub func html_token_add_attribute(this: HtmlToken*, attribute: HtmlTokenAttribute):
+    assert(html_token_is_start_tag(this) or html_token_is_end_tag(this))
+    ak.vector_append_t(html_token_ensure_tag_attributes(this), attribute)
+
+## Ported from Libraries/LibWeb/HTML/Parser/HTMLToken.h:204 Web::HTML::HTMLToken::last_attribute.
+pub func html_token_last_attribute_const(this: const HtmlToken*) -> const HtmlTokenAttribute*:
+    assert(html_token_is_start_tag(this) or html_token_is_end_tag(this))
+    assert(html_token_has_attributes(this))
+    let attributes = html_token_tag_attributes_const(this) else trap("VERIFY: has_attributes()")
+    return ak.vector_last_const(attributes)
+
+## Ported from Libraries/LibWeb/HTML/Parser/HTMLToken.h:211 Web::HTML::HTMLToken::last_attribute.
+pub func html_token_last_attribute(this: HtmlToken*) -> HtmlTokenAttribute*:
+    assert(html_token_is_start_tag(this) or html_token_is_end_tag(this))
+    assert(html_token_has_attributes(this))
+    let attributes = html_token_tag_attributes(this) else trap("VERIFY: has_attributes()")
+    return ak.vector_last(attributes)
+
+## Ported from Libraries/LibWeb/HTML/Parser/HTMLToken.h:218 Web::HTML::HTMLToken::drop_attributes.
+pub func html_token_drop_attributes(this: HtmlToken*):
+    assert(html_token_is_start_tag(this) or html_token_is_end_tag(this))
+    # m_data.get<OwnPtr<Vector<Attribute>>>().clear(): the OwnPtr lets go of the Vector.
+    match this.m_data:
+        .vector_html_token_attribute(_): this.m_data = .vector_html_token_attribute(value = none)
+        _: trap("Variant::get<OwnPtr<Vector<Attribute>>>: another alternative is held")
+
+## Ported from Libraries/LibWeb/HTML/Parser/HTMLToken.h:224 Web::HTML::HTMLToken::for_each_attribute.
+pub func html_token_for_each_attribute_const(this: const HtmlToken*, callback: ak.Function1[const HtmlTokenAttribute*, ak.IterationDecision]):
+    assert(html_token_is_start_tag(this) or html_token_is_end_tag(this))
+    let ptr = html_token_tag_attributes_const(this) else return
+    for attribute in ak.vector_span_const(ptr):
+        if ak.function1_call(&callback, &attribute) == ak.IterationDecision.break_:
+            break
+
+## Ported from Libraries/LibWeb/HTML/Parser/HTMLToken.h:236 Web::HTML::HTMLToken::for_each_attribute.
+pub func html_token_for_each_attribute(this: HtmlToken*, callback: ak.Function1[HtmlTokenAttribute*, ak.IterationDecision]):
+    assert(html_token_is_start_tag(this) or html_token_is_end_tag(this))
+    let ptr = html_token_tag_attributes(this) else return
+    for attribute in &ak.vector_span(ptr):
+        if ak.function1_call(&callback, attribute) == ak.IterationDecision.break_:
+            break
+
+## Ported from Libraries/LibWeb/HTML/Parser/HTMLToken.h:248 Web::HTML::HTMLToken::attribute.
+pub func html_token_attribute(this: const HtmlToken*, attribute_name: ak.FlyString) -> ak.String?:
+    if let result = html_token_raw_attribute(this, attribute_name):
+        return result.value
+    return none
+
+## Ported from Libraries/LibWeb/HTML/Parser/HTMLToken.h:255 Web::HTML::HTMLToken::raw_attribute.
+pub func html_token_raw_attribute(this: const HtmlToken*, attribute_name: ak.FlyString) -> const HtmlTokenAttribute*?:
+    assert(html_token_is_start_tag(this) or html_token_is_end_tag(this))
+
+    let ptr = html_token_tag_attributes_const(this) else return none
+    for attribute in &ak.vector_span_const(ptr):
+        if ak.fly_string_eq_fly_string(&attribute_name, &attribute.local_name):
+            return attribute
+    return none
+
+## Ported from Libraries/LibWeb/HTML/Parser/HTMLToken.h:269 Web::HTML::HTMLToken::has_attribute.
+pub func html_token_has_attribute(this: const HtmlToken*, attribute_name: ak.FlyString) -> bool:
+    return html_token_attribute(this, attribute_name) != none
+
+## Ported from Libraries/LibWeb/HTML/Parser/HTMLToken.h:274 Web::HTML::HTMLToken::adjust_tag_name.
+pub func html_token_adjust_tag_name(this: HtmlToken*, old_name: ak.FlyString, new_name: ak.FlyString):
+    assert(html_token_is_start_tag(this) or html_token_is_end_tag(this))
+    let tag_name = html_token_tag_name(this)
+    if ak.fly_string_eq_fly_string(&old_name, &tag_name):
+        html_token_set_tag_name(this, new_name)
+
+## Ported from Libraries/LibWeb/HTML/Parser/HTMLToken.h:281 Web::HTML::HTMLToken::adjust_attribute_name.
+pub func html_token_adjust_attribute_name(this: HtmlToken*, old_name: ak.FlyString, new_name: ak.FlyString):
+    assert(html_token_is_start_tag(this) or html_token_is_end_tag(this))
+    # for_each_attribute([&](Attribute& attribute) { ...; return IterationDecision::Continue; })
+    let ptr = html_token_tag_attributes(this) else return
+    for attribute in &ak.vector_span(ptr):
+        if ak.fly_string_eq_fly_string(&old_name, &attribute.local_name):
+            attribute.local_name = new_name
+
+## Ported from Libraries/LibWeb/HTML/Parser/HTMLToken.h:291 Web::HTML::HTMLToken::adjust_foreign_attribute.
+pub func html_token_adjust_foreign_attribute(this: HtmlToken*, old_name: ak.FlyString, prefix: ak.FlyString?, local_name: ak.FlyString, namespace_: ak.FlyString?):
+    assert(html_token_is_start_tag(this) or html_token_is_end_tag(this))
+    # for_each_attribute([&](Attribute& attribute) { ...; return IterationDecision::Continue; })
+    let ptr = html_token_tag_attributes(this) else return
+    for attribute in &ak.vector_span(ptr):
+        if ak.fly_string_eq_fly_string(&old_name, &attribute.local_name):
+            attribute.prefix = prefix
+            attribute.local_name = local_name
+            attribute.namespace_ = namespace_
+
+# mark: DOCTYPE data ============================================================================
+
+## Ported from Libraries/LibWeb/HTML/Parser/HTMLToken.h:304 Web::HTML::HTMLToken::doctype_data.
+pub func html_token_doctype_data(this: const HtmlToken*) -> const HtmlTokenDoctypeData*:
+    assert(html_token_is_doctype(this))
+    match this.m_data:
+        .html_token_doctype_data(value):
+            return value else trap("VERIFY: ptr")
+        _: trap("Variant::get<OwnPtr<DoctypeData>>: another alternative is held")
+
+## Ported from Libraries/LibWeb/HTML/Parser/HTMLToken.h:312 Web::HTML::HTMLToken::ensure_doctype_data.
+pub func html_token_ensure_doctype_data(this: HtmlToken*) -> HtmlTokenDoctypeData*:
+    assert(html_token_is_doctype(this))
+    match this.m_data:
+        .html_token_doctype_data(value):
+            if let ptr = value:
+                return ptr
+            # make<DoctypeData>(), with DoctypeData's default member initializers.
+            let ptr = new HtmlTokenDoctypeData(name = ak.string_new(), public_identifier = ak.string_new(),
+                system_identifier = ak.string_new(), missing_name = true, missing_public_identifier = true,
+                missing_system_identifier = true, force_quirks = false) else trap("out of memory")
+            this.m_data = .html_token_doctype_data(value = ptr)
+            return ptr
+        _: trap("Variant::get<OwnPtr<DoctypeData>>: another alternative is held")
+
+# mark: Type, text and positions ================================================================
+
+## Ported from Libraries/LibWeb/HTML/Parser/HTMLToken.h:321 Web::HTML::HTMLToken::type.
+pub func html_token_type(this: const HtmlToken*) -> HtmlTokenType:
+    return this.m_type
+
+## Ported from Libraries/LibWeb/HTML/Parser/HTMLToken.cpp:12 Web::HTML::HTMLToken::to_string.
+pub func html_token_to_string(this: const HtmlToken*) -> ak.String:
+    var builder = ak.string_builder_new()
+
+    match html_token_type(this):
+        .doctype:
+            ak.string_builder_append(&builder, "DOCTYPE")
+            ak.string_builder_append(&builder, " { name: '")
+            ak.string_builder_append_string_view(&builder, ak.string_bytes_as_string_view(&html_token_doctype_data(this).name))
+            ak.string_builder_append(&builder, "' }")
+        .start_tag:
+            ak.string_builder_append(&builder, "StartTag")
+        .end_tag:
+            ak.string_builder_append(&builder, "EndTag")
+        .comment:
+            ak.string_builder_append(&builder, "Comment")
+        .character:
+            ak.string_builder_append(&builder, "Character")
+        .end_of_file:
+            ak.string_builder_append(&builder, "EndOfFile")
+        .invalid:
+            trap("VERIFY_NOT_REACHED")
+        _:
+            discard(0)
+
+    if html_token_type(this) == HtmlTokenType.start_tag or html_token_type(this) == HtmlTokenType.end_tag:
+        ak.string_builder_append(&builder, " { name: '")
+        let tag_name = html_token_tag_name(this)
+        ak.string_builder_append_string_view(&builder, ak.fly_string_bytes_as_string_view(&tag_name))
+        ak.string_builder_append(&builder, "', { ")
+        # for_each_attribute([&](auto& attribute) { ...; return IterationDecision::Continue; })
+        if let attributes = html_token_tag_attributes_const(this):
+            for attribute in &ak.vector_span_const(attributes):
+                ak.string_builder_append_string_view(&builder, ak.fly_string_bytes_as_string_view(&attribute.local_name))
+                ak.string_builder_append(&builder, "=\"")
+                ak.string_builder_append_string_view(&builder, ak.string_bytes_as_string_view(&attribute.value))
+                ak.string_builder_append(&builder, "\" ")
+        ak.string_builder_append(&builder, "} }")
+
+    if html_token_is_comment(this):
+        ak.string_builder_append(&builder, " { data: '")
+        let comment = html_token_comment(this)
+        ak.string_builder_append_string_view(&builder, ak.string_bytes_as_string_view(&comment))
+        ak.string_builder_append(&builder, "' }")
+
+    if html_token_is_character(this):
+        ak.string_builder_append(&builder, " { data: '")
+        ak.string_builder_append_code_point(&builder, html_token_code_point(this))
+        ak.string_builder_append(&builder, "' }")
+
+    # builder.appendff("@{}:{}", ...): AK's "{}" of a size_t is its decimal digits.
+    var buffer: u8[96]
+    if html_token_type(this) == HtmlTokenType.character:
+        let text = format(buffer, f"@{this.m_start_position.line}:{this.m_start_position.column}") else trap("MUST: appendff")
+        ak.string_builder_append(&builder, text)
+    else:
+        let text = format(buffer, f"@{this.m_start_position.line}:{this.m_start_position.column}-{this.m_end_position.line}:{this.m_end_position.column}") else trap("MUST: appendff")
+        ak.string_builder_append(&builder, text)
+
+    return ak.string_builder_to_string(&builder) else trap("MUST: builder.to_string()")
+
+## Ported from Libraries/LibWeb/HTML/Parser/HTMLToken.h:325 Web::HTML::HTMLToken::start_position.
+pub func html_token_start_position(this: const HtmlToken*) -> HtmlTokenPosition:
+    return this.m_start_position
+
+## Ported from Libraries/LibWeb/HTML/Parser/HTMLToken.h:326 Web::HTML::HTMLToken::end_position.
+pub func html_token_end_position(this: const HtmlToken*) -> HtmlTokenPosition:
+    return this.m_end_position
+
+## Ported from Libraries/LibWeb/HTML/Parser/HTMLToken.h:328 Web::HTML::HTMLToken::set_start_position.
+pub func html_token_set_start_position(this: HtmlToken*, start_position: HtmlTokenPosition):
+    this.m_start_position = start_position
+
+## Ported from Libraries/LibWeb/HTML/Parser/HTMLToken.h:329 Web::HTML::HTMLToken::set_end_position.
+pub func html_token_set_end_position(this: HtmlToken*, end_position: HtmlTokenPosition):
+    this.m_end_position = end_position
+
+## Ported from Libraries/LibWeb/HTML/Parser/HTMLToken.cpp:77 Web::HTML::HTMLToken::normalize_attributes.
+pub func html_token_normalize_attributes(this: HtmlToken*):
+    # From AttributeNameState: https://html.spec.whatwg.org/multipage/parsing.html#attribute-name-state
+    #
+    # When the user agent leaves the attribute name state (and before emitting the tag token, if appropriate),
+    # the complete attribute's name must be compared to the other attributes on the same token;
+    # if there is already an attribute on the token with the exact same name, then this is a duplicate-attribute
+    # parse error and the new attribute must be removed from the token.
+
+    # NOTE: If an attribute is so removed from a token, it, and the value that gets associated with it, if any,
+    # are never subsequently used by the parser, and are therefore effectively discarded. Removing the attribute
+    # in this way does not change its status as the "current attribute" for the purposes of the tokenizer, however.
+
+    var seen_attributes: ak.HashTable[ak.FlyString, ak.FlyStringTraits]
+    let tag_attributes = html_token_tag_attributes(this) else return
+    var i: usize = 0
+    while i < ak.vector_size(tag_attributes):
+        let attribute = ak.vector_at(tag_attributes, i)
+        if ak.hash_table_set(&seen_attributes, attribute.local_name, ak.HashSetExistingEntryBehavior.keep) == ak.HashSetResult.kept_existing_entry:
+            # This is a duplicate attribute, remove it.
+            ak.vector_remove(tag_attributes, i)
+            this.m_had_duplicate_attribute = true
+            continue
+        i += 1
+
+## Ported from Libraries/LibWeb/HTML/Parser/HTMLToken.h:332 Web::HTML::HTMLToken::had_duplicate_attribute.
+pub func html_token_had_duplicate_attribute(this: const HtmlToken*) -> bool:
+    return this.m_had_duplicate_attribute
+
+# mark: The attribute list ======================================================================
+
+## Ported from Libraries/LibWeb/HTML/Parser/HTMLToken.h:335 Web::HTML::HTMLToken::tag_attributes.
+pub func html_token_tag_attributes_const(this: const HtmlToken*) -> const ak.Vector[HtmlTokenAttribute]*?:
+    match this.m_data:
+        .vector_html_token_attribute(value): return value
+        _: trap("Variant::get<OwnPtr<Vector<Attribute>>>: another alternative is held")
+
+## Ported from Libraries/LibWeb/HTML/Parser/HTMLToken.h:340 Web::HTML::HTMLToken::tag_attributes.
+pub func html_token_tag_attributes(this: HtmlToken*) -> ak.Vector[HtmlTokenAttribute]*?:
+    match this.m_data:
+        .vector_html_token_attribute(value): return value
+        _: trap("Variant::get<OwnPtr<Vector<Attribute>>>: another alternative is held")
+
+## Ported from Libraries/LibWeb/HTML/Parser/HTMLToken.h:345 Web::HTML::HTMLToken::ensure_tag_attributes.
+pub func html_token_ensure_tag_attributes(this: HtmlToken*) -> ak.Vector[HtmlTokenAttribute]*:
+    assert(html_token_is_start_tag(this) or html_token_is_end_tag(this))
+    match this.m_data:
+        .vector_html_token_attribute(value):
+            if let ptr = value:
+                return ptr
+            # make<Vector<Attribute>>()
+            let ptr = new ak.Vector[HtmlTokenAttribute] else trap("out of memory")
+            this.m_data = .vector_html_token_attribute(value = ptr)
+            return ptr
+        _: trap("Variant::get<OwnPtr<Vector<Attribute>>>: another alternative is held")

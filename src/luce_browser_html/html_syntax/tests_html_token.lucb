@@ -1,0 +1,231 @@
+#==============================================================================================
+#
+#   tests_html_token - HTMLToken's API and the tokenizer's parser hooks
+#
+#   DESCRIPTION:
+#       The donor has no unit test for HTMLToken beyond TestHTMLTokenizer; these tests pin the
+#       members the tokenizer does not reach (the ones HTMLParser uses: make_start_tag,
+#       attribute lookups, the adjust_* functions, the self-closing flag, to_string), and the
+#       tokenizer's parser-facing members (set_parser's hook, switch_to, state_name), to the
+#       C++ definitions in HTMLToken.h and HTMLTokenizer.h.
+#
+#==============================================================================================
+
+# mark: Helpers =================================================================================
+
+func string_is(string: ak.String, text: str) -> bool:
+    return ak.string_eq_string_view(&string, ak.sv(text))
+
+func fly_is(string: ak.FlyString, text: str) -> bool:
+    return ak.fly_string_eq_string_view(&string, ak.sv(text))
+
+# A start tag token with the attributes `names`, valued "v0", "v1", ...
+func start_tag_with_attributes(tag_name: str, names: const str[]) -> HtmlToken:
+    var token = html_token_make_start_tag(ak.fly_string_from_str(tag_name))
+    for (index, name) in names.indexed():
+        var attribute = html_token_attribute_new()
+        attribute.local_name = ak.fly_string_from_str(name)
+        var buffer: u8[16]
+        attribute.value = ak.string_from_str(format(buffer, f"v{index}") else trap("format"))
+        html_token_add_attribute(&token, attribute)
+    return token
+
+# The for_each_attribute callbacks: count the attributes seen, stop at a name.
+struct AttributeWalk:
+    var seen: usize
+    var stop_at: str
+
+func count_attributes_until(context: void*?, attribute: const HtmlTokenAttribute*) -> ak.IterationDecision:
+    let walk = (AttributeWalk*)(context else trap("no captures"))
+    walk.seen += 1
+    if ak.fly_string_eq_string_view(&attribute.local_name, ak.sv(walk.stop_at)):
+        return ak.IterationDecision.break_
+    return ak.IterationDecision.continue_
+
+func uppercase_values(context: void*?, attribute: HtmlTokenAttribute*) -> ak.IterationDecision:
+    attribute.value = ak.string_to_ascii_uppercase(&attribute.value)
+    return ak.IterationDecision.continue_
+
+# mark: HTMLToken ===============================================================================
+
+noinline func test_token_types():
+    var character = html_token_make_character(0x41)
+    assert(html_token_is_character(&character) and not html_token_is_start_tag(&character))
+    assert(html_token_code_point(&character) == 0x41)
+    html_token_set_code_point(&character, 0x0D)
+    assert(html_token_is_parser_whitespace(&character))
+    let whitespace: u32[5] = [0x09, 0x0A, 0x0C, 0x0D, 0x20]
+    for code_point in whitespace:
+        html_token_set_code_point(&character, code_point)
+        assert(html_token_is_parser_whitespace(&character))
+    let not_whitespace: u32[4] = [0x0B, 0x00, 0xA0, 0x41]
+    for code_point in not_whitespace:
+        html_token_set_code_point(&character, code_point)
+        assert(not html_token_is_parser_whitespace(&character))
+
+    var comment: HtmlToken
+    html_token_construct(&comment, HtmlTokenType.comment)
+    assert(html_token_is_comment(&comment) and not html_token_is_parser_whitespace(&comment))
+    assert(string_is(html_token_comment(&comment), ""))
+    html_token_set_comment(&comment, ak.string_from_str("hi"))
+    assert(string_is(html_token_comment(&comment), "hi"))
+
+    var eof: HtmlToken
+    html_token_construct(&eof, HtmlTokenType.end_of_file)
+    assert(html_token_is_end_of_file(&eof) and html_token_type(&eof) == HtmlTokenType.end_of_file)
+
+    var doctype: HtmlToken
+    html_token_construct(&doctype, HtmlTokenType.doctype)
+    assert(html_token_is_doctype(&doctype))
+    let data = html_token_ensure_doctype_data(&doctype)
+    assert(data.missing_name and data.missing_public_identifier and data.missing_system_identifier and not data.force_quirks)
+    data.name = ak.string_from_str("html")
+    assert(html_token_ensure_doctype_data(&doctype) == data)
+    assert(string_is(html_token_doctype_data(&doctype).name, "html"))
+
+test "HTMLToken: types, code points, comments and DOCTYPE data":
+    with memory.heap: test_token_types()
+
+noinline func test_token_tags():
+    let names: str[3] = ["href", "id", "class"]
+    var token = start_tag_with_attributes("a", names)
+    assert(html_token_is_start_tag(&token) and fly_is(html_token_tag_name(&token), "a"))
+    assert(html_token_has_attributes(&token) and html_token_attribute_count(&token) == 3)
+    assert(fly_is(html_token_last_attribute_const(&token).local_name, "class"))
+    assert(string_is(html_token_attribute(&token, ak.fly_string_from_str("id")) else trap("no id"), "v1"))
+    assert(html_token_attribute(&token, ak.fly_string_from_str("title")) == none)
+    assert(html_token_has_attribute(&token, ak.fly_string_from_str("href")))
+    assert(not html_token_has_attribute(&token, ak.fly_string_from_str("HREF")))
+
+    # for_each_attribute stops at IterationDecision::Break.
+    var walk = AttributeWalk(seen = 0, stop_at = "id")
+    html_token_for_each_attribute_const(&token, ak.Function1[const HtmlTokenAttribute*, ak.IterationDecision](call = count_attributes_until, context = &walk))
+    assert(walk.seen == 2)
+    html_token_for_each_attribute(&token, ak.Function1[HtmlTokenAttribute*, ak.IterationDecision](call = uppercase_values, context = none))
+    assert(string_is(html_token_attribute(&token, ak.fly_string_from_str("class")) else trap("no class"), "V2"))
+
+    # The self-closing flag and its acknowledgement.
+    assert(not html_token_is_self_closing(&token))
+    html_token_acknowledge_self_closing_flag_if_set(&token)
+    assert(not token.m_tag_self_closing_acknowledged)
+    html_token_set_self_closing(&token, true)
+    assert(not html_token_has_acknowledged_self_closing_flag(&token))
+    html_token_acknowledge_self_closing_flag_if_set(&token)
+    assert(html_token_has_acknowledged_self_closing_flag(&token))
+
+    # The tree builder's adjustments.
+    html_token_adjust_tag_name(&token, ak.fly_string_from_str("b"), ak.fly_string_from_str("x"))
+    assert(fly_is(html_token_tag_name(&token), "a"))
+    html_token_adjust_tag_name(&token, ak.fly_string_from_str("a"), ak.fly_string_from_str("textPath"))
+    assert(fly_is(html_token_tag_name(&token), "textPath"))
+    html_token_adjust_attribute_name(&token, ak.fly_string_from_str("id"), ak.fly_string_from_str("viewBox"))
+    assert(html_token_has_attribute(&token, ak.fly_string_from_str("viewBox")) and not html_token_has_attribute(&token, ak.fly_string_from_str("id")))
+    html_token_adjust_foreign_attribute(&token, ak.fly_string_from_str("href"), ak.fly_string_from_str("xlink"), ak.fly_string_from_str("href"), ak.fly_string_from_str("http://www.w3.org/1999/xlink"))
+    let href = html_token_raw_attribute(&token, ak.fly_string_from_str("href")) else trap("no href")
+    assert(fly_is(href.prefix else trap("no prefix"), "xlink"))
+    assert(fly_is(href.namespace_ else trap("no namespace"), "http://www.w3.org/1999/xlink"))
+    let class_attribute = html_token_raw_attribute(&token, ak.fly_string_from_str("class")) else trap("no class")
+    assert(class_attribute.prefix == none and class_attribute.namespace_ == none)
+
+    html_token_drop_attributes(&token)
+    assert(not html_token_has_attributes(&token) and html_token_attribute_count(&token) == 0)
+    assert(html_token_tag_attributes(&token) == none)
+    html_token_add_attribute(&token, html_token_attribute_new())
+    assert(html_token_attribute_count(&token) == 1)
+
+test "HTMLToken: tags, attribute lookups and adjustments":
+    with memory.heap: test_token_tags()
+
+noinline func test_token_normalize_attributes():
+    let names: str[5] = ["a", "b", "a", "c", "b"]
+    var token = start_tag_with_attributes("p", names)
+    assert(not html_token_had_duplicate_attribute(&token))
+    html_token_normalize_attributes(&token)
+    assert(html_token_had_duplicate_attribute(&token))
+    assert(html_token_attribute_count(&token) == 3)
+    # The first of each name stays.
+    assert(string_is(html_token_attribute(&token, ak.fly_string_from_str("a")) else trap("no a"), "v0"))
+    assert(string_is(html_token_attribute(&token, ak.fly_string_from_str("b")) else trap("no b"), "v1"))
+    assert(fly_is(html_token_last_attribute(&token).local_name, "c"))
+
+test "HTMLToken::normalize_attributes":
+    with memory.heap: test_token_normalize_attributes()
+
+noinline func test_token_to_string():
+    var doctype: HtmlToken
+    html_token_construct(&doctype, HtmlTokenType.doctype)
+    html_token_ensure_doctype_data(&doctype).name = ak.string_from_str("html")
+    html_token_set_start_position(&doctype, HtmlTokenPosition(line = 1, column = 2))
+    html_token_set_end_position(&doctype, HtmlTokenPosition(line = 3, column = 4))
+    assert(string_is(html_token_to_string(&doctype), "DOCTYPE { name: 'html' }@1:2-3:4"))
+
+    let names: str[2] = ["x", "y"]
+    var tag = start_tag_with_attributes("div", names)
+    assert(string_is(html_token_to_string(&tag), "StartTag { name: 'div', { x=\"v0\" y=\"v1\" } }@0:0-0:0"))
+    var end_tag: HtmlToken
+    html_token_construct(&end_tag, HtmlTokenType.end_tag)
+    html_token_set_tag_name(&end_tag, ak.fly_string_from_str("div"))
+    assert(string_is(html_token_to_string(&end_tag), "EndTag { name: 'div', { } }@0:0-0:0"))
+
+    var comment: HtmlToken
+    html_token_construct(&comment, HtmlTokenType.comment)
+    html_token_set_comment(&comment, ak.string_from_str(" c "))
+    assert(string_is(html_token_to_string(&comment), "Comment { data: ' c ' }@0:0-0:0"))
+
+    var character = html_token_make_character(0x20AC)
+    html_token_set_start_position(&character, HtmlTokenPosition(line = 7, column = 8))
+    assert(string_is(html_token_to_string(&character), "Character { data: '\u{20AC}' }@7:8"))
+
+    var eof: HtmlToken
+    html_token_construct(&eof, HtmlTokenType.end_of_file)
+    assert(string_is(html_token_to_string(&eof), "EndOfFile@0:0-0:0"))
+
+test "HTMLToken::to_string":
+    with memory.heap: test_token_to_string()
+
+# mark: The tokenizer's parser hooks ============================================================
+
+# The parser's hook: the context is a bool saying whether the adjusted current node is foreign.
+func test_parser_node_is_foreign(parser: void*) -> bool:
+    return *(bool*)parser
+
+noinline func test_tokenizer_parser_hooks():
+    for foreign in [false, true]:
+        var is_foreign = foreign
+        var tokenizer: HtmlTokenizer
+        html_tokenizer_construct_string_view(&tokenizer, ak.sv("<![CDATA[a]]>"), ak.byte_string_from_str("UTF-8"))
+        html_tokenizer_set_parser(&tokenizer, test_parser_node_is_foreign, &is_foreign)
+        var token = html_tokenizer_next_token(&tokenizer) else trap("no token")
+        if foreign:
+            # CDATA section state: the characters of the section.
+            assert(html_token_is_character(&token) and html_token_code_point(&token) == (u32)'a')
+        else:
+            # Bogus comment state: "[CDATA[a]]" as a comment.
+            assert(html_token_is_comment(&token) and string_is(html_token_comment(&token), "[CDATA[a]]"))
+
+    # Without a parser, CDATA is a bogus comment (syntax highlighting runs the tokenizer alone).
+    var tokenizer: HtmlTokenizer
+    html_tokenizer_construct_string_view(&tokenizer, ak.sv("<![CDATA[a]]><p>x</p>"), ak.byte_string_from_str("UTF-8"))
+    var comment = html_tokenizer_next_token(&tokenizer) else trap("no token")
+    assert(html_token_is_comment(&comment))
+
+    # The parser switches the tokenizer's state after <p> (as for <plaintext>).
+    var start_tag = html_tokenizer_next_token(&tokenizer) else trap("no token")
+    assert(html_token_is_start_tag(&start_tag))
+    html_tokenizer_switch_to_html_parser(&tokenizer, .plaintext)
+    for expected in "x</p>".bytes:
+        var character = html_tokenizer_next_token(&tokenizer) else trap("no token")
+        assert(html_token_code_point(&character) == expected)
+    var eof = html_tokenizer_next_token(&tokenizer) else trap("no token")
+    assert(html_token_is_end_of_file(&eof))
+    assert(html_tokenizer_next_token(&tokenizer) == none)
+
+test "HTMLTokenizer: the parser's hooks and switch_to":
+    with memory.heap: test_tokenizer_parser_hooks()
+
+test "HTMLTokenizer::state_name":
+    assert(html_tokenizer_state_name(.data) == "Data")
+    assert(html_tokenizer_state_name(.rcdata) == "RCDATA")
+    assert(html_tokenizer_state_name(.before_doctype_name) == "BeforeDOCTYPEName")
+    assert(html_tokenizer_state_name(.cdata_section_end) == "CDATASectionEnd")
+    assert(html_tokenizer_state_name(.numeric_character_reference_end) == "NumericCharacterReferenceEnd")

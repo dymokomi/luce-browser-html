@@ -1,0 +1,218 @@
+#==============================================================================================
+#
+#   html_tokenizer_8 - HTMLTokenizer states: double-escaped script data and CDATA sections
+#
+#   DESCRIPTION:
+#       Port of Libraries/LibWeb/HTML/Parser/HTMLTokenizer.cpp (lines 2483-2873): the states
+#       ScriptDataDoubleEscapeStart to CDATASectionEnd of next_token, one function each (see
+#       html_tokenizer_1 for how the macros map to TokenizerStep).
+#
+#==============================================================================================
+
+# The lambda `temporary_buffer_equal_to_script` of the ScriptDataDoubleEscapeStart and
+# ScriptDataDoubleEscapeEnd states.
+func html_tokenizer_temporary_buffer_equal_to_script(this: HtmlTokenizer*) -> bool:
+    if ak.vector_size(&this.m_temporary_buffer) != 6:
+        return false
+
+    # FIXME: Is there a better way of doing this?
+    let buffer = ak.vector_span(&this.m_temporary_buffer)
+    return buffer[0] == (u32)'s' and buffer[1] == (u32)'c' and buffer[2] == (u32)'r' and buffer[3] == (u32)'i' and buffer[4] == (u32)'p' and buffer[5] == (u32)'t'
+
+# mark: Double-escaped script data ==============================================================
+
+# 13.2.5.26 Script data double escape start state, https://html.spec.whatwg.org/multipage/parsing.html#script-data-double-escape-start-state
+func html_tokenizer_script_data_double_escape_start_state(this: HtmlTokenizer*, current_input_character: u32?, stop_at_insertion_point: HtmlTokenizerStopAtInsertionPoint) -> TokenizerStep:
+    if on_whitespace(current_input_character) or on(current_input_character, '/') or on(current_input_character, '>'):
+        # ON_WHITESPACE, ON('/') and ON('>') have the same body.
+        if html_tokenizer_temporary_buffer_equal_to_script(this):
+            return tokenizer_switch_to_and_emit_current_character(this, current_input_character, .script_data_double_escaped)
+        return tokenizer_switch_to_and_emit_current_character(this, current_input_character, .script_data_escaped)
+    if on_ascii_upper_alpha(current_input_character):
+        ak.vector_append_t(&this.m_temporary_buffer, ak.to_ascii_lowercase(input_value(current_input_character)))
+        return tokenizer_emit_current_character(this, current_input_character)
+    if on_ascii_lower_alpha(current_input_character):
+        ak.vector_append_t(&this.m_temporary_buffer, input_value(current_input_character))
+        return tokenizer_emit_current_character(this, current_input_character)
+    return tokenizer_reconsume_in(this, .script_data_escaped)
+
+# 13.2.5.27 Script data double escaped state, https://html.spec.whatwg.org/multipage/parsing.html#script-data-double-escaped-state
+func html_tokenizer_script_data_double_escaped_state(this: HtmlTokenizer*, current_input_character: u32?, stop_at_insertion_point: HtmlTokenizerStopAtInsertionPoint) -> TokenizerStep:
+    if on(current_input_character, '-'):
+        return tokenizer_switch_to_and_emit_character(this, (u32)'-', .script_data_double_escaped_dash)
+    if on(current_input_character, '<'):
+        return tokenizer_switch_to_and_emit_character(this, (u32)'<', .script_data_double_escaped_less_than_sign)
+    if on(current_input_character, 0):
+        log_parse_error()
+        return tokenizer_emit_character(this, 0xFFFD)
+    if on_eof(current_input_character):
+        log_parse_error()
+        return tokenizer_emit_eof(this)
+    return tokenizer_emit_current_character(this, current_input_character)
+
+# 13.2.5.28 Script data double escaped dash state, https://html.spec.whatwg.org/multipage/parsing.html#script-data-double-escaped-dash-state
+func html_tokenizer_script_data_double_escaped_dash_state(this: HtmlTokenizer*, current_input_character: u32?, stop_at_insertion_point: HtmlTokenizerStopAtInsertionPoint) -> TokenizerStep:
+    if on(current_input_character, '-'):
+        return tokenizer_switch_to_and_emit_character(this, (u32)'-', .script_data_double_escaped_dash_dash)
+    if on(current_input_character, '<'):
+        return tokenizer_switch_to_and_emit_character(this, (u32)'<', .script_data_double_escaped_less_than_sign)
+    if on(current_input_character, 0):
+        log_parse_error()
+        return tokenizer_switch_to_and_emit_character(this, 0xFFFD, .script_data_double_escaped)
+    if on_eof(current_input_character):
+        log_parse_error()
+        return tokenizer_emit_eof(this)
+    return tokenizer_switch_to_and_emit_current_character(this, current_input_character, .script_data_double_escaped)
+
+# 13.2.5.29 Script data double escaped dash dash state, https://html.spec.whatwg.org/multipage/parsing.html#script-data-double-escaped-dash-dash-state
+func html_tokenizer_script_data_double_escaped_dash_dash_state(this: HtmlTokenizer*, current_input_character: u32?, stop_at_insertion_point: HtmlTokenizerStopAtInsertionPoint) -> TokenizerStep:
+    if on(current_input_character, '-'):
+        return tokenizer_emit_character(this, (u32)'-')
+    if on(current_input_character, '<'):
+        return tokenizer_switch_to_and_emit_character(this, (u32)'<', .script_data_double_escaped_less_than_sign)
+    if on(current_input_character, '>'):
+        return tokenizer_switch_to_and_emit_character(this, (u32)'>', .script_data)
+    if on(current_input_character, 0):
+        log_parse_error()
+        return tokenizer_switch_to_and_emit_character(this, 0xFFFD, .script_data_double_escaped)
+    if on_eof(current_input_character):
+        log_parse_error()
+        return tokenizer_emit_eof(this)
+    return tokenizer_switch_to_and_emit_current_character(this, current_input_character, .script_data_double_escaped)
+
+# 13.2.5.30 Script data double escaped less-than sign state, https://html.spec.whatwg.org/multipage/parsing.html#script-data-double-escaped-less-than-sign-state
+func html_tokenizer_script_data_double_escaped_less_than_sign_state(this: HtmlTokenizer*, current_input_character: u32?, stop_at_insertion_point: HtmlTokenizerStopAtInsertionPoint) -> TokenizerStep:
+    if on(current_input_character, '/'):
+        ak.vector_clear(&this.m_temporary_buffer)
+        return tokenizer_switch_to_and_emit_character(this, (u32)'/', .script_data_double_escape_end)
+    return tokenizer_reconsume_in(this, .script_data_double_escaped)
+
+# 13.2.5.31 Script data double escape end state, https://html.spec.whatwg.org/multipage/parsing.html#script-data-double-escape-end-state
+func html_tokenizer_script_data_double_escape_end_state(this: HtmlTokenizer*, current_input_character: u32?, stop_at_insertion_point: HtmlTokenizerStopAtInsertionPoint) -> TokenizerStep:
+    if on_whitespace(current_input_character) or on(current_input_character, '/') or on(current_input_character, '>'):
+        # ON_WHITESPACE, ON('/') and ON('>') have the same body.
+        if html_tokenizer_temporary_buffer_equal_to_script(this):
+            return tokenizer_switch_to_and_emit_current_character(this, current_input_character, .script_data_escaped)
+        return tokenizer_switch_to_and_emit_current_character(this, current_input_character, .script_data_double_escaped)
+    if on_ascii_upper_alpha(current_input_character):
+        ak.vector_append_t(&this.m_temporary_buffer, ak.to_ascii_lowercase(input_value(current_input_character)))
+        return tokenizer_emit_current_character(this, current_input_character)
+    if on_ascii_lower_alpha(current_input_character):
+        ak.vector_append_t(&this.m_temporary_buffer, input_value(current_input_character))
+        return tokenizer_emit_current_character(this, current_input_character)
+    return tokenizer_reconsume_in(this, .script_data_double_escaped)
+
+# mark: Escaped script data =====================================================================
+
+# 13.2.5.21 Script data escaped dash state, https://html.spec.whatwg.org/multipage/parsing.html#script-data-escaped-dash-state
+func html_tokenizer_script_data_escaped_dash_state(this: HtmlTokenizer*, current_input_character: u32?, stop_at_insertion_point: HtmlTokenizerStopAtInsertionPoint) -> TokenizerStep:
+    if on(current_input_character, '-'):
+        return tokenizer_switch_to_and_emit_character(this, (u32)'-', .script_data_escaped_dash_dash)
+    if on(current_input_character, '<'):
+        return tokenizer_switch_to(this, .script_data_escaped_less_than_sign)
+    if on(current_input_character, 0):
+        log_parse_error()
+        return tokenizer_switch_to_and_emit_character(this, 0xFFFD, .script_data_escaped)
+    if on_eof(current_input_character):
+        log_parse_error()
+        return tokenizer_emit_eof(this)
+    return tokenizer_switch_to_and_emit_current_character(this, current_input_character, .script_data_escaped)
+
+# 13.2.5.20 Script data escaped state, https://html.spec.whatwg.org/multipage/parsing.html#script-data-escaped-state
+func html_tokenizer_script_data_escaped_state(this: HtmlTokenizer*, current_input_character: u32?, stop_at_insertion_point: HtmlTokenizerStopAtInsertionPoint) -> TokenizerStep:
+    if on(current_input_character, '-'):
+        return tokenizer_switch_to_and_emit_character(this, (u32)'-', .script_data_escaped_dash)
+    if on(current_input_character, '<'):
+        return tokenizer_switch_to(this, .script_data_escaped_less_than_sign)
+    if on(current_input_character, 0):
+        log_parse_error()
+        return tokenizer_emit_character(this, 0xFFFD)
+    if on_eof(current_input_character):
+        log_parse_error()
+        return tokenizer_emit_eof(this)
+    return tokenizer_emit_current_character(this, current_input_character)
+
+# mark: Script data end tags ====================================================================
+
+# 13.2.5.16 Script data end tag open state, https://html.spec.whatwg.org/multipage/parsing.html#script-data-end-tag-open-state
+func html_tokenizer_script_data_end_tag_open_state(this: HtmlTokenizer*, current_input_character: u32?, stop_at_insertion_point: HtmlTokenizerStopAtInsertionPoint) -> TokenizerStep:
+    if on_ascii_alpha(current_input_character):
+        html_tokenizer_create_new_token(this, HtmlTokenType.end_tag)
+        return tokenizer_reconsume_in(this, .script_data_end_tag_name)
+    ak.queue_enqueue(&this.m_queued_tokens, html_token_make_character((u32)'<'))
+    ak.queue_enqueue(&this.m_queued_tokens, html_token_make_character((u32)'/'))
+    return tokenizer_reconsume_in(this, .script_data)
+
+# 13.2.5.17 Script data end tag name state, https://html.spec.whatwg.org/multipage/parsing.html#script-data-end-tag-name-state
+func html_tokenizer_script_data_end_tag_name_state(this: HtmlTokenizer*, current_input_character: u32?, stop_at_insertion_point: HtmlTokenizerStopAtInsertionPoint) -> TokenizerStep:
+    if on_whitespace(current_input_character):
+        html_token_set_tag_name(&this.m_current_token, ak.fly_string_from_string(html_tokenizer_consume_current_builder(this)))
+        if html_tokenizer_current_end_tag_token_is_appropriate(this):
+            return tokenizer_switch_to(this, .before_attribute_name)
+        ak.queue_enqueue(&this.m_queued_tokens, html_token_make_character((u32)'<'))
+        ak.queue_enqueue(&this.m_queued_tokens, html_token_make_character((u32)'/'))
+        # NOTE: The spec doesn't mention this, but it seems that m_current_token (an end tag) is just dropped in this case.
+        ak.string_builder_clear(&this.m_current_builder)
+        tokenizer_enqueue_temporary_buffer(this)
+        return tokenizer_reconsume_in(this, .script_data)
+    if on(current_input_character, '/'):
+        html_token_set_tag_name(&this.m_current_token, ak.fly_string_from_string(html_tokenizer_consume_current_builder(this)))
+        if html_tokenizer_current_end_tag_token_is_appropriate(this):
+            return tokenizer_switch_to(this, .self_closing_start_tag)
+        ak.queue_enqueue(&this.m_queued_tokens, html_token_make_character((u32)'<'))
+        ak.queue_enqueue(&this.m_queued_tokens, html_token_make_character((u32)'/'))
+        # NOTE: The spec doesn't mention this, but it seems that m_current_token (an end tag) is just dropped in this case.
+        ak.string_builder_clear(&this.m_current_builder)
+        tokenizer_enqueue_temporary_buffer(this)
+        return tokenizer_reconsume_in(this, .script_data)
+    if on(current_input_character, '>'):
+        html_token_set_tag_name(&this.m_current_token, ak.fly_string_from_string(html_tokenizer_consume_current_builder(this)))
+        if html_tokenizer_current_end_tag_token_is_appropriate(this):
+            return tokenizer_switch_to_and_emit_current_token(this, .data)
+        ak.queue_enqueue(&this.m_queued_tokens, html_token_make_character((u32)'<'))
+        ak.queue_enqueue(&this.m_queued_tokens, html_token_make_character((u32)'/'))
+        # NOTE: The spec doesn't mention this, but it seems that m_current_token (an end tag) is just dropped in this case.
+        ak.string_builder_clear(&this.m_current_builder)
+        tokenizer_enqueue_temporary_buffer(this)
+        return tokenizer_reconsume_in(this, .script_data)
+    if on_ascii_upper_alpha(current_input_character):
+        ak.string_builder_append_code_point(&this.m_current_builder, ak.to_ascii_lowercase(input_value(current_input_character)))
+        ak.vector_append_t(&this.m_temporary_buffer, input_value(current_input_character))
+        return TokenizerStep.consume_next
+    if on_ascii_lower_alpha(current_input_character):
+        ak.string_builder_append_u8(&this.m_current_builder, (u8)input_value(current_input_character))
+        ak.vector_append_t(&this.m_temporary_buffer, input_value(current_input_character))
+        return TokenizerStep.consume_next
+    ak.queue_enqueue(&this.m_queued_tokens, html_token_make_character((u32)'<'))
+    ak.queue_enqueue(&this.m_queued_tokens, html_token_make_character((u32)'/'))
+    # NOTE: The spec doesn't mention this, but it seems that m_current_token (an end tag) is just dropped in this case.
+    ak.string_builder_clear(&this.m_current_builder)
+    tokenizer_enqueue_temporary_buffer(this)
+    return tokenizer_reconsume_in(this, .script_data)
+
+# mark: CDATA sections ==========================================================================
+
+# 13.2.5.69 CDATA section state, https://html.spec.whatwg.org/multipage/parsing.html#cdata-section-state
+func html_tokenizer_cdata_section_state(this: HtmlTokenizer*, current_input_character: u32?, stop_at_insertion_point: HtmlTokenizerStopAtInsertionPoint) -> TokenizerStep:
+    if on(current_input_character, ']'):
+        return tokenizer_switch_to(this, .cdata_section_bracket)
+    if on_eof(current_input_character):
+        log_parse_error()
+        return tokenizer_emit_eof(this)
+    return tokenizer_emit_current_character(this, current_input_character)
+
+# 13.2.5.70 CDATA section bracket state, https://html.spec.whatwg.org/multipage/parsing.html#cdata-section-bracket-state
+func html_tokenizer_cdata_section_bracket_state(this: HtmlTokenizer*, current_input_character: u32?, stop_at_insertion_point: HtmlTokenizerStopAtInsertionPoint) -> TokenizerStep:
+    if on(current_input_character, ']'):
+        return tokenizer_switch_to(this, .cdata_section_end)
+    return tokenizer_emit_character_and_reconsume_in(this, (u32)']', .cdata_section)
+
+# 13.2.5.71 CDATA section end state, https://html.spec.whatwg.org/multipage/parsing.html#cdata-section-end-state
+func html_tokenizer_cdata_section_end_state(this: HtmlTokenizer*, current_input_character: u32?, stop_at_insertion_point: HtmlTokenizerStopAtInsertionPoint) -> TokenizerStep:
+    if on(current_input_character, ']'):
+        return tokenizer_emit_character(this, (u32)']')
+    if on(current_input_character, '>'):
+        return tokenizer_switch_to(this, .data)
+    ak.queue_enqueue(&this.m_queued_tokens, html_token_make_character((u32)']'))
+    ak.queue_enqueue(&this.m_queued_tokens, html_token_make_character((u32)']'))
+    return tokenizer_reconsume_in(this, .cdata_section)

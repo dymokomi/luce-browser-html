@@ -1,0 +1,63 @@
+#==============================================================================================
+#
+#   gen_entities - the generator of html_syntax's named character reference tables
+#
+#   DESCRIPTION:
+#       Port of Meta/Generators/generate_libweb_html_named_character_references.py (Ladybird
+#       47c82b38d0), the generator of Build/Libraries/LibWeb/HTML/Parser/
+#       NamedCharacterReferences.cpp. It reads the named character references of the HTML
+#       standard, data/Entities.json (Libraries/LibWeb/HTML/Parser/Entities.json), builds the
+#       same DAFSA with the same minimal perfect hashing, and writes its tables as Luce:
+#
+#           named_character_reference_tables.lucb   the code point lookup, the DAFSA nodes and
+#                                                   its first and second layers
+#
+#       The C++ header the Python script also writes (the enum, the node structs and
+#       named_character_reference_second_codepoint_value) is ported by hand in
+#       types_generated_named_character_references.lucb and entities.lucb.
+#
+#       Usage: gen_entities DATA_DIRECTORY OUTPUT_DIRECTORY, e.g. gen_entities data
+#       src/luce_browser_html/html_syntax. test.sh regenerates into a temporary directory and
+#       compares with the committed fragment.
+#
+#       Copyright (c) 2024, the SerenityOS developers.
+#       Copyright (c) 2026-present, the Ladybird developers.
+#       Copyright (c) 2026 the luce-browser authors.
+#       SPDX-License-Identifier: BSD-2-Clause (see LICENSE)
+#
+#==============================================================================================
+
+import c
+import files
+import strings
+
+## Entities.json is not what the generator expects.
+let invalid_entities: ErrorCode = ErrorCode.package(901)
+
+## Generate the tables from `arguments[1]` (the data directory) into `arguments[2]`.
+pub func main(arguments: c.str[]) -> i32!:
+    if arguments.length != 3:
+        print("usage: gen_entities DATA_DIRECTORY OUTPUT_DIRECTORY")
+        return 2
+    let data_directory = try str(arguments[1])
+    let output_directory = try str(arguments[2])
+
+    let entities = try parse_entities(try read_data(data_directory, "Entities.json"))
+    try write_output(output_directory, "named_character_reference_tables.lucb", try emit_tables(entities))
+    return 0
+
+## The bytes of the data file `name` of `directory`; the whole run owns them.
+func read_data(directory: str, name: str) -> u8[]!:
+    var path = try strings.Builder.create()
+    try path.put(directory)
+    try path.put("/")
+    try path.put(name)
+    return try files.read((c.str)path.view())
+
+## Write `text` to the file `name` of `directory`.
+func write_output(directory: str, name: str, text: str) -> !:
+    var path = try strings.Builder.create()
+    try path.put(directory)
+    try path.put("/")
+    try path.put(name)
+    try files.write((c.str)path.view(), text.bytes)

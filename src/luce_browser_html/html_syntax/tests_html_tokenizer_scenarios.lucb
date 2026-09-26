@@ -1,0 +1,228 @@
+#==============================================================================================
+#
+#   tests_html_tokenizer_scenarios - the input stream API, pinned to the donor
+#
+#   DESCRIPTION:
+#       Streaming input, insertion points (document.write), nested insertion points, abort
+#       and a legacy encoding, each run as the local oracle's scenarios run the donor's
+#       HTMLTokenizer (.donors/luce-browser-tools/html_tokenizer_oracle, `oracle --scenarios`),
+#       compared with its output. dump_token is in tests_html_tokenizer_cases_1.
+#
+#==============================================================================================
+
+# mark: The harness =============================================================================
+
+# drain(): tokens until next_token answers none ("(none)") or after the EOF token.
+func scenario_drain(builder: ak.StringBuilder*, tokenizer: HtmlTokenizer*, stop: HtmlTokenizerStopAtInsertionPoint):
+    while true:
+        let maybe_token = html_tokenizer_next_token(tokenizer, stop)
+        if maybe_token == none:
+            ak.string_builder_append(builder, "(none)\n")
+            return
+        var token = maybe_token else trap("unreachable")
+        dump_token(builder, &token)
+        if html_token_is_end_of_file(&token):
+            return
+
+# drain_one(): one token of next_token(StopAtInsertionPoint::No).
+func scenario_drain_one(builder: ak.StringBuilder*, tokenizer: HtmlTokenizer*):
+    let maybe_token = html_tokenizer_next_token(tokenizer)
+    if maybe_token == none:
+        ak.string_builder_append(builder, "(none)\n")
+        return
+    var token = maybe_token else trap("unreachable")
+    dump_token(builder, &token)
+
+# show(): the unparsed input and the stream flags.
+func scenario_show(builder: ak.StringBuilder*, tokenizer: HtmlTokenizer*):
+    ak.string_builder_append(builder, "unparsed=")
+    dump_escaped_string(builder, html_tokenizer_unparsed_input(tokenizer))
+    var buffer: u8[128]
+    ak.string_builder_append(builder, format(buffer, f" defined={(i32)html_tokenizer_is_insertion_point_defined(tokenizer)} reached={(i32)html_tokenizer_is_insertion_point_reached(tokenizer)} closed={(i32)html_tokenizer_is_input_stream_closed(tokenizer)} eof_inserted={(i32)html_tokenizer_is_eof_inserted(tokenizer)} blocked={(i32)html_tokenizer_is_blocked(tokenizer)}\n") else trap("format"))
+
+func check_scenario(builder: ak.StringBuilder*, expected: str):
+    let actual = ak.string_builder_string_view(builder)
+    if not ak.string_view_equals(&actual, expected):
+        print(f"expected:\n{expected}")
+        print(f"actual:\n{(str)ak.string_view_bytes(&actual)}")
+        trap("the scenario differs from the donor's")
+
+# mark: Scenarios ===============================================================================
+
+noinline func test_scenario_streaming():
+    var builder = ak.string_builder_new()
+    var t: HtmlTokenizer
+    html_tokenizer_construct(&t)
+    html_tokenizer_append_to_input_stream(&t, ak.sv("<p cla"))
+    scenario_drain(&builder, &t, .no)
+    scenario_show(&builder, &t)
+    html_tokenizer_append_to_input_stream(&t, ak.sv("ss=x>a\r"))
+    scenario_drain(&builder, &t, .no)
+    html_tokenizer_append_to_input_stream(&t, ak.sv("\nb&no"))
+    scenario_drain(&builder, &t, .no)
+    html_tokenizer_append_to_input_stream(&t, ak.sv("t;c&notin"))
+    scenario_drain(&builder, &t, .no)
+    html_tokenizer_append_to_input_stream(&t, ak.sv("d\u{E9}"))
+    scenario_drain(&builder, &t, .no)
+    scenario_show(&builder, &t)
+    html_tokenizer_close_input_stream(&t)
+    scenario_drain(&builder, &t, .no)
+    scenario_show(&builder, &t)
+    check_scenario(&builder, """
+        (none)
+        unparsed= defined=0 reached=0 closed=0 eof_inserted=0 blocked=0
+        StartTag p self_closing=0 dup=0 attributes=1 [class=x 0:3-0:8 0:9-0:10] @0:1-0:10
+        Character U+0061 @0:12-0:0
+        (none)
+        Character U+000A @1:0-0:0
+        Character U+0062 @1:1-0:0
+        (none)
+        Character U+00AC @1:6-0:0
+        Character U+0063 @1:7-0:0
+        (none)
+        Character U+00AC @0:0-0:0
+        Character U+0069 @0:0-0:0
+        Character U+006E @0:0-0:0
+        Character U+0064 @0:0-0:0
+        Character U+00E9 @0:0-0:0
+        (none)
+        unparsed= defined=0 reached=0 closed=0 eof_inserted=0 blocked=0
+        EOF @0:0-0:0
+        unparsed= defined=0 reached=0 closed=1 eof_inserted=0 blocked=0
+        """)
+
+test "scenario: streaming input":
+    with memory.heap: test_scenario_streaming()
+
+noinline func test_scenario_insertion_point():
+    var builder = ak.string_builder_new()
+    var t: HtmlTokenizer
+    html_tokenizer_construct(&t)
+    html_tokenizer_append_to_input_stream(&t, ak.sv("<a>12<b>tail</b>"))
+    scenario_drain_one(&builder, &t)
+    html_tokenizer_update_insertion_point(&t)
+    scenario_show(&builder, &t)
+    html_tokenizer_insert_input_at_insertion_point(&t, ak.sv("<i>w&amp</i>"))
+    scenario_show(&builder, &t)
+    scenario_drain(&builder, &t, .yes)
+    scenario_show(&builder, &t)
+    html_tokenizer_store_old_insertion_point(&t)
+    html_tokenizer_undefine_insertion_point(&t)
+    scenario_show(&builder, &t)
+    scenario_drain(&builder, &t, .no)
+    html_tokenizer_restore_old_insertion_point(&t)
+    scenario_show(&builder, &t)
+    html_tokenizer_close_input_stream(&t)
+    scenario_drain(&builder, &t, .no)
+    scenario_show(&builder, &t)
+    html_tokenizer_parser_did_run(&t)
+    scenario_show(&builder, &t)
+    check_scenario(&builder, """
+        StartTag a self_closing=0 dup=0 attributes=0 @0:1-0:2
+        unparsed=12<b>tail</b> defined=1 reached=1 closed=0 eof_inserted=0 blocked=0
+        unparsed=<i>w&amp</i>12<b>tail</b> defined=1 reached=0 closed=0 eof_inserted=0 blocked=0
+        StartTag i self_closing=0 dup=0 attributes=0 @0:4-0:5
+        Character U+0077 @0:7-0:0
+        Character U+0026 @0:11-0:0
+        EndTag i self_closing=0 dup=0 attributes=0 @0:13-0:14
+        (none)
+        unparsed=12<b>tail</b> defined=1 reached=1 closed=0 eof_inserted=0 blocked=0
+        unparsed=12<b>tail</b> defined=0 reached=0 closed=0 eof_inserted=0 blocked=0
+        Character U+0031 @0:16-0:0
+        Character U+0032 @0:17-0:0
+        StartTag b self_closing=0 dup=0 attributes=0 @0:18-0:19
+        Character U+0074 @0:21-0:0
+        Character U+0061 @0:22-0:0
+        Character U+0069 @0:23-0:0
+        Character U+006C @0:24-0:0
+        EndTag b self_closing=0 dup=0 attributes=0 @0:26-0:27
+        (none)
+        unparsed= defined=1 reached=1 closed=0 eof_inserted=0 blocked=0
+        EOF @0:28-0:28
+        unparsed= defined=1 reached=1 closed=1 eof_inserted=0 blocked=0
+        unparsed= defined=1 reached=1 closed=1 eof_inserted=0 blocked=0
+        """)
+
+test "scenario: insertion point":
+    with memory.heap: test_scenario_insertion_point()
+
+noinline func test_scenario_nested_insertion_points():
+    var builder = ak.string_builder_new()
+    var t: HtmlTokenizer
+    html_tokenizer_construct(&t)
+    html_tokenizer_append_to_input_stream(&t, ak.sv("x<y>z"))
+    scenario_drain_one(&builder, &t)
+    scenario_drain_one(&builder, &t)
+    html_tokenizer_update_insertion_point(&t)
+    html_tokenizer_store_old_insertion_point(&t)
+    html_tokenizer_insert_input_at_insertion_point(&t, ak.sv("AB"))
+    scenario_show(&builder, &t)
+    html_tokenizer_store_old_insertion_point(&t)
+    html_tokenizer_insert_input_at_insertion_point(&t, ak.sv("\u{20AC}\r"))
+    scenario_show(&builder, &t)
+    scenario_drain(&builder, &t, .yes)
+    html_tokenizer_insert_input_at_insertion_point(&t, ak.sv("\n"))
+    scenario_drain(&builder, &t, .yes)
+    html_tokenizer_restore_old_insertion_point(&t)
+    scenario_show(&builder, &t)
+    html_tokenizer_restore_old_insertion_point(&t)
+    scenario_show(&builder, &t)
+    html_tokenizer_insert_eof(&t)
+    html_tokenizer_set_blocked(&t, true)
+    scenario_show(&builder, &t)
+    html_tokenizer_undefine_insertion_point(&t)
+    scenario_drain(&builder, &t, .no)
+    check_scenario(&builder, """
+        Character U+0078 @0:1-0:0
+        StartTag y self_closing=0 dup=0 attributes=0 @0:2-0:3
+        unparsed=ABz defined=1 reached=0 closed=0 eof_inserted=0 blocked=0
+        unparsed=AB\u{20AC}\\rz defined=1 reached=0 closed=0 eof_inserted=0 blocked=0
+        Character U+0041 @0:5-0:0
+        Character U+0042 @0:6-0:0
+        Character U+20AC @0:7-0:0
+        (none)
+        Character U+000A @1:0-0:0
+        (none)
+        unparsed=z defined=1 reached=1 closed=0 eof_inserted=0 blocked=0
+        unparsed=z defined=1 reached=1 closed=0 eof_inserted=0 blocked=0
+        unparsed=z defined=1 reached=1 closed=1 eof_inserted=1 blocked=1
+        Character U+007A @1:1-0:0
+        EOF @1:1-1:1
+        """)
+
+test "scenario: nested insertion points":
+    with memory.heap: test_scenario_nested_insertion_points()
+
+noinline func test_scenario_abort():
+    var builder = ak.string_builder_new()
+    var t: HtmlTokenizer
+    html_tokenizer_construct_string_view(&t, ak.sv("<a>b"), ak.byte_string_from_str("UTF-8"))
+    scenario_drain_one(&builder, &t)
+    html_tokenizer_abort(&t)
+    scenario_drain(&builder, &t, .no)
+    check_scenario(&builder, """
+        StartTag a self_closing=0 dup=0 attributes=0 @0:1-0:2
+        (none)
+        """)
+
+test "scenario: abort":
+    with memory.heap: test_scenario_abort()
+
+noinline func test_scenario_windows_1252():
+    var builder = ak.string_builder_new()
+    var t: HtmlTokenizer
+    html_tokenizer_construct_string_view(&t, ak.string_view_from_bytes(b"<p title=\x93q\x94>\x80\xe9"), ak.byte_string_from_str("windows-1252"))
+    scenario_drain(&builder, &t, .no)
+    ak.string_builder_append(&builder, "source=")
+    dump_escaped_string(&builder, html_tokenizer_source(&t))
+    ak.string_builder_append(&builder, "\n")
+    check_scenario(&builder, """
+        StartTag p self_closing=0 dup=0 attributes=1 [title=\u{201C}q\u{201D} 0:3-0:8 0:9-0:12] @0:1-0:12
+        Character U+20AC @0:14-0:0
+        Character U+00E9 @0:15-0:0
+        EOF @0:15-0:15
+        source=<p title=\u{201C}q\u{201D}>\u{20AC}\u{E9}
+        """)
+
+test "scenario: windows-1252":
+    with memory.heap: test_scenario_windows_1252()

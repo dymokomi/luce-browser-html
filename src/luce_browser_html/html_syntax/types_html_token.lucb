@@ -41,10 +41,28 @@ pub struct HtmlTokenPosition:
     pub var line: usize  # C++ default: { 0 }
     pub var column: usize  # C++ default: { 0 }
 
-## Web::HTML::HTMLToken::Attribute (Libraries/LibWeb/HTML/Parser/HTMLToken.h:42): opaque in this phase (not in the phase-1 closure).
-pub struct HtmlTokenAttribute:
-    pub var opaque_: u8
+# mark: HtmlTokenAttribute ======================================================================
 
-## Web::HTML::HTMLToken::DoctypeData (Libraries/LibWeb/HTML/Parser/HTMLToken.h:53): opaque in this phase (not in the phase-1 closure).
+## Web::HTML::HTMLToken::Attribute (Libraries/LibWeb/HTML/Parser/HTMLToken.h:42).
+pub struct HtmlTokenAttribute:
+    pub var prefix: ak.FlyString?
+    pub var local_name: ak.FlyString
+    pub var namespace_: ak.FlyString?
+    pub var value: ak.String
+    pub var name_start_position: HtmlTokenPosition
+    pub var value_start_position: HtmlTokenPosition
+    pub var name_end_position: HtmlTokenPosition
+    pub var value_end_position: HtmlTokenPosition
+
+# mark: HtmlTokenDoctypeData ====================================================================
+
+## Web::HTML::HTMLToken::DoctypeData (Libraries/LibWeb/HTML/Parser/HTMLToken.h:53).
 pub struct HtmlTokenDoctypeData:
-    pub var opaque_: u8
+    # NOTE: "Missing" is a distinct state from the empty string.
+    pub var name: ak.String
+    pub var public_identifier: ak.String
+    pub var system_identifier: ak.String
+    pub var missing_name: bool  # C++ default: { true }
+    pub var missing_public_identifier: bool  # C++ default: { true }
+    pub var missing_system_identifier: bool  # C++ default: { true }
+    pub var force_quirks: bool  # C++ default: { false }

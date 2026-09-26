@@ -1,0 +1,364 @@
+#==============================================================================================
+#
+#   html_tokenizer_9 - HTMLTokenizer: construction, the input stream API and helpers
+#
+#   DESCRIPTION:
+#       Port of Libraries/LibWeb/HTML/Parser/HTMLTokenizer.cpp (lines 2881-3076) and the inline
+#       members of HTMLTokenizer.h (lines 106-237), in the header's order first.
+#
+#       HTMLTokenizer::m_parser (GC::Ptr<HTMLParser>) is the hook of DESIGN.md §4.1.3: the
+#       parser installs m_adjusted_current_node_is_foreign and m_parser_context with
+#       html_tokenizer_set_parser, and the markup declaration open state asks the hook whether
+#       the adjusted current node is outside the HTML namespace.
+#
+#==============================================================================================
+
+# mark: HTMLTokenizer.h =========================================================================
+
+## Ported from Libraries/LibWeb/HTML/Parser/HTMLTokenizer.h:123 Web::HTML::HTMLTokenizer::set_parser.
+## Retyped by DESIGN.md §4.1.3: HTMLParser passes itself as `parser` and a function whose
+## `adjusted_current_node_is_foreign(parser)` answers `parser.adjusted_current_node() &&
+## parser.adjusted_current_node()->namespace_uri() != Namespace::HTML`.
+pub func html_tokenizer_set_parser(this: HtmlTokenizer*, adjusted_current_node_is_foreign: func(void*) -> bool, parser: void*):
+    this.m_adjusted_current_node_is_foreign = adjusted_current_node_is_foreign
+    this.m_parser_context = parser
+
+# `m_parser != nullptr && m_parser->adjusted_current_node() && m_parser->adjusted_current_node()->namespace_uri() != Namespace::HTML`
+func html_tokenizer_adjusted_current_node_is_foreign(this: const HtmlTokenizer*) -> bool:
+    let hook = this.m_adjusted_current_node_is_foreign else return false
+    let parser = this.m_parser_context else return false
+    return hook(parser)
+
+## Ported from Libraries/LibWeb/HTML/Parser/HTMLTokenizer.h:126 Web::HTML::HTMLTokenizer::switch_to.
+pub func html_tokenizer_switch_to_html_tokenizer_state(this: HtmlTokenizer*, new_state: HtmlTokenizerState):
+    this.m_state = new_state
+
+## Ported from Libraries/LibWeb/HTML/Parser/HTMLTokenizer.h:131 Web::HTML::HTMLTokenizer::set_blocked.
+pub func html_tokenizer_set_blocked(this: HtmlTokenizer*, b: bool):
+    this.m_blocked = b
+
+## Ported from Libraries/LibWeb/HTML/Parser/HTMLTokenizer.h:132 Web::HTML::HTMLTokenizer::is_blocked.
+pub func html_tokenizer_is_blocked(this: const HtmlTokenizer*) -> bool:
+    return this.m_blocked
+
+## Ported from Libraries/LibWeb/HTML/Parser/HTMLTokenizer.h:134 Web::HTML::HTMLTokenizer::source.
+pub func html_tokenizer_source(this: const HtmlTokenizer*) -> ak.String:
+    return this.m_source
+
+## Ported from Libraries/LibWeb/HTML/Parser/HTMLTokenizer.h:140 Web::HTML::HTMLTokenizer::is_input_stream_closed.
+pub func html_tokenizer_is_input_stream_closed(this: const HtmlTokenizer*) -> bool:
+    return this.m_input_stream_closed
+
+## Ported from Libraries/LibWeb/HTML/Parser/HTMLTokenizer.h:145 Web::HTML::HTMLTokenizer::is_insertion_point_defined.
+pub func html_tokenizer_is_insertion_point_defined(this: const HtmlTokenizer*) -> bool:
+    return this.m_insertion_point != none
+
+## Ported from Libraries/LibWeb/HTML/Parser/HTMLTokenizer.h:146 Web::HTML::HTMLTokenizer::is_insertion_point_reached.
+pub func html_tokenizer_is_insertion_point_reached(this: HtmlTokenizer*) -> bool:
+    if let insertion_point = this.m_insertion_point:
+        return this.m_current_offset >= insertion_point
+    return false
+
+## Ported from Libraries/LibWeb/HTML/Parser/HTMLTokenizer.h:147 Web::HTML::HTMLTokenizer::undefine_insertion_point.
+pub func html_tokenizer_undefine_insertion_point(this: HtmlTokenizer*):
+    this.m_insertion_point = none
+
+## Ported from Libraries/LibWeb/HTML/Parser/HTMLTokenizer.h:148 Web::HTML::HTMLTokenizer::store_old_insertion_point.
+pub func html_tokenizer_store_old_insertion_point(this: HtmlTokenizer*):
+    ak.vector_append_t(&this.m_old_insertion_points, this.m_insertion_point)
+
+## Ported from Libraries/LibWeb/HTML/Parser/HTMLTokenizer.h:149 Web::HTML::HTMLTokenizer::restore_old_insertion_point.
+pub func html_tokenizer_restore_old_insertion_point(this: HtmlTokenizer*):
+    this.m_insertion_point = ak.vector_take_last(&this.m_old_insertion_points)
+
+## Ported from Libraries/LibWeb/HTML/Parser/HTMLTokenizer.h:150 Web::HTML::HTMLTokenizer::update_insertion_point.
+pub func html_tokenizer_update_insertion_point(this: HtmlTokenizer*):
+    this.m_insertion_point = this.m_current_offset
+
+## Ported from Libraries/LibWeb/HTML/Parser/HTMLTokenizer.h:153 Web::HTML::HTMLTokenizer::abort.
+## This permanently cuts off the tokenizer input stream.
+pub func html_tokenizer_abort(this: HtmlTokenizer*):
+    this.m_aborted = true
+
+## Ported from Libraries/LibWeb/HTML/Parser/HTMLTokenizer.h:177 Web::HTML::HTMLTokenizer::state_name.
+## The C++ `char const*` is the state's name as a `str`.
+pub func html_tokenizer_state_name(state: HtmlTokenizerState) -> str:
+    match state:
+        .data: return "Data"
+        .rcdata: return "RCDATA"
+        .rawtext: return "RAWTEXT"
+        .script_data: return "ScriptData"
+        .plaintext: return "PLAINTEXT"
+        .tag_open: return "TagOpen"
+        .end_tag_open: return "EndTagOpen"
+        .tag_name: return "TagName"
+        .rcdata_less_than_sign: return "RCDATALessThanSign"
+        .rcdata_end_tag_open: return "RCDATAEndTagOpen"
+        .rcdata_end_tag_name: return "RCDATAEndTagName"
+        .rawtext_less_than_sign: return "RAWTEXTLessThanSign"
+        .rawtext_end_tag_open: return "RAWTEXTEndTagOpen"
+        .rawtext_end_tag_name: return "RAWTEXTEndTagName"
+        .script_data_less_than_sign: return "ScriptDataLessThanSign"
+        .script_data_end_tag_open: return "ScriptDataEndTagOpen"
+        .script_data_end_tag_name: return "ScriptDataEndTagName"
+        .script_data_escape_start: return "ScriptDataEscapeStart"
+        .script_data_escape_start_dash: return "ScriptDataEscapeStartDash"
+        .script_data_escaped: return "ScriptDataEscaped"
+        .script_data_escaped_dash: return "ScriptDataEscapedDash"
+        .script_data_escaped_dash_dash: return "ScriptDataEscapedDashDash"
+        .script_data_escaped_less_than_sign: return "ScriptDataEscapedLessThanSign"
+        .script_data_escaped_end_tag_open: return "ScriptDataEscapedEndTagOpen"
+        .script_data_escaped_end_tag_name: return "ScriptDataEscapedEndTagName"
+        .script_data_double_escape_start: return "ScriptDataDoubleEscapeStart"
+        .script_data_double_escaped: return "ScriptDataDoubleEscaped"
+        .script_data_double_escaped_dash: return "ScriptDataDoubleEscapedDash"
+        .script_data_double_escaped_dash_dash: return "ScriptDataDoubleEscapedDashDash"
+        .script_data_double_escaped_less_than_sign: return "ScriptDataDoubleEscapedLessThanSign"
+        .script_data_double_escape_end: return "ScriptDataDoubleEscapeEnd"
+        .before_attribute_name: return "BeforeAttributeName"
+        .attribute_name: return "AttributeName"
+        .after_attribute_name: return "AfterAttributeName"
+        .before_attribute_value: return "BeforeAttributeValue"
+        .attribute_value_double_quoted: return "AttributeValueDoubleQuoted"
+        .attribute_value_single_quoted: return "AttributeValueSingleQuoted"
+        .attribute_value_unquoted: return "AttributeValueUnquoted"
+        .after_attribute_value_quoted: return "AfterAttributeValueQuoted"
+        .self_closing_start_tag: return "SelfClosingStartTag"
+        .bogus_comment: return "BogusComment"
+        .markup_declaration_open: return "MarkupDeclarationOpen"
+        .comment_start: return "CommentStart"
+        .comment_start_dash: return "CommentStartDash"
+        .comment: return "Comment"
+        .comment_less_than_sign: return "CommentLessThanSign"
+        .comment_less_than_sign_bang: return "CommentLessThanSignBang"
+        .comment_less_than_sign_bang_dash: return "CommentLessThanSignBangDash"
+        .comment_less_than_sign_bang_dash_dash: return "CommentLessThanSignBangDashDash"
+        .comment_end_dash: return "CommentEndDash"
+        .comment_end: return "CommentEnd"
+        .comment_end_bang: return "CommentEndBang"
+        .doctype: return "DOCTYPE"
+        .before_doctype_name: return "BeforeDOCTYPEName"
+        .doctype_name: return "DOCTYPEName"
+        .after_doctype_name: return "AfterDOCTYPEName"
+        .after_doctype_public_keyword: return "AfterDOCTYPEPublicKeyword"
+        .before_doctype_public_identifier: return "BeforeDOCTYPEPublicIdentifier"
+        .doctype_public_identifier_double_quoted: return "DOCTYPEPublicIdentifierDoubleQuoted"
+        .doctype_public_identifier_single_quoted: return "DOCTYPEPublicIdentifierSingleQuoted"
+        .after_doctype_public_identifier: return "AfterDOCTYPEPublicIdentifier"
+        .between_doctype_public_and_system_identifiers: return "BetweenDOCTYPEPublicAndSystemIdentifiers"
+        .after_doctype_system_keyword: return "AfterDOCTYPESystemKeyword"
+        .before_doctype_system_identifier: return "BeforeDOCTYPESystemIdentifier"
+        .doctype_system_identifier_double_quoted: return "DOCTYPESystemIdentifierDoubleQuoted"
+        .doctype_system_identifier_single_quoted: return "DOCTYPESystemIdentifierSingleQuoted"
+        .after_doctype_system_identifier: return "AfterDOCTYPESystemIdentifier"
+        .bogus_doctype: return "BogusDOCTYPE"
+        .cdata_section: return "CDATASection"
+        .cdata_section_bracket: return "CDATASectionBracket"
+        .cdata_section_end: return "CDATASectionEnd"
+        .character_reference: return "CharacterReference"
+        .named_character_reference: return "NamedCharacterReference"
+        .ambiguous_ampersand: return "AmbiguousAmpersand"
+        .numeric_character_reference: return "NumericCharacterReference"
+        .hexadecimal_character_reference_start: return "HexadecimalCharacterReferenceStart"
+        .decimal_character_reference_start: return "DecimalCharacterReferenceStart"
+        .hexadecimal_character_reference: return "HexadecimalCharacterReference"
+        .decimal_character_reference: return "DecimalCharacterReference"
+        .numeric_character_reference_end: return "NumericCharacterReferenceEnd"
+        _: trap("VERIFY_NOT_REACHED")
+
+# mark: Matching and tokens =====================================================================
+
+## Ported from Libraries/LibWeb/HTML/Parser/HTMLTokenizer.cpp:2882 Web::HTML::HTMLTokenizer::consume_next_if_match.
+pub func html_tokenizer_consume_next_if_match(this: HtmlTokenizer*, string: ak.StringView, stop_at_insertion_point: HtmlTokenizerStopAtInsertionPoint, case_sensitivity: ak.CaseSensitivity = ak.CaseSensitivity.case_sensitive) -> HtmlTokenizerConsumeNextResult:
+    for i in 0..<ak.string_view_length(&string):
+        let maybe_code_point = html_tokenizer_peek_code_point(this, (isize)i, stop_at_insertion_point)
+        if maybe_code_point == none:
+            if html_tokenizer_can_run_out_of_characters(this, stop_at_insertion_point):
+                return HtmlTokenizerConsumeNextResult.ran_out_of_characters
+            return HtmlTokenizerConsumeNextResult.not_consumed
+        let code_point = maybe_code_point else trap("unreachable")
+        # FIXME: This should be more Unicode-aware.
+        if case_sensitivity == ak.CaseSensitivity.case_insensitive:
+            if code_point < 0x80:
+                if ak.to_ascii_lowercase(code_point) != ak.to_ascii_lowercase(ak.string_view_at(&string, i)):
+                    return HtmlTokenizerConsumeNextResult.not_consumed
+                continue
+        if code_point != (u32)ak.string_view_at(&string, i):
+            return HtmlTokenizerConsumeNextResult.not_consumed
+    html_tokenizer_skip(this, ak.string_view_length(&string))
+    return HtmlTokenizerConsumeNextResult.consumed
+
+## Ported from Libraries/LibWeb/HTML/Parser/HTMLTokenizer.cpp:2906 Web::HTML::HTMLTokenizer::create_new_token.
+pub func html_tokenizer_create_new_token(this: HtmlTokenizer*, type_: HtmlTokenType):
+    html_token_construct(&this.m_current_token, type_)
+
+    let is_start_or_end_tag = type_ == HtmlTokenType.start_tag or type_ == HtmlTokenType.end_tag
+    html_token_set_start_position(&this.m_current_token, html_tokenizer_nth_last_position(this, 1 if is_start_or_end_tag else 0))
+
+# mark: Construction and the input stream =======================================================
+
+# The default member initializers of HTMLTokenizer that are not zero.
+func html_tokenizer_init_fields(this: HtmlTokenizer*):
+    this.m_state = HtmlTokenizerState.data
+    this.m_return_state = HtmlTokenizerState.data
+    this.m_source = ak.string_new()
+    html_token_construct(&this.m_current_token, HtmlTokenType.invalid)
+    ak.string_builder_construct(&this.m_current_builder)
+    this.m_named_character_reference_matcher = NamedCharacterReferenceMatcher()
+
+## Ported from Libraries/LibWeb/HTML/Parser/HTMLTokenizer.cpp:2914 Web::HTML::HTMLTokenizer::HTMLTokenizer.
+pub func html_tokenizer_construct(this: HtmlTokenizer*):
+    html_tokenizer_init_fields(this)
+    ak.vector_clear(&this.m_decoded_input)
+    this.m_current_offset = 0
+    this.m_prev_offset = 0
+    ak.vector_append_t(&this.m_source_positions, HtmlTokenPosition(line = 0, column = 0))
+
+## Ported from Libraries/LibWeb/HTML/Parser/HTMLTokenizer.cpp:2922 Web::HTML::HTMLTokenizer::HTMLTokenizer.
+pub func html_tokenizer_construct_string_view(this: HtmlTokenizer*, input: ak.StringView, encoding: ak.ByteString):
+    html_tokenizer_init_fields(this)
+    let decoder = text_codec.decoder_for(ak.byte_string_view(&encoding)) else trap("VERIFY: decoder.has_value()")
+    this.m_source = text_codec.decoder_to_utf8(decoder, input) else trap("MUST: decoder->to_utf8(input)")
+    let source_bytes = ak.string_bytes_as_string_view(&this.m_source)
+    ak.vector_ensure_capacity(&this.m_decoded_input, ak.string_view_length(&source_bytes))
+    let code_points = ak.string_code_points(&this.m_source)
+    var it = ak.utf8_view_begin(&code_points)
+    while not ak.utf8_code_point_iterator_done(&it):
+        ak.vector_append_t(&this.m_decoded_input, ak.utf8_code_point_iterator_deref(&it))
+        discard(ak.utf8_code_point_iterator_inc(&it))
+    this.m_current_offset = 0
+    this.m_prev_offset = 0
+    ak.vector_append_t(&this.m_source_positions, HtmlTokenPosition(line = 0, column = 0))
+    this.m_input_stream_closed = true
+
+## Ported from Libraries/LibWeb/HTML/Parser/HTMLTokenizer.cpp:2936 Web::HTML::HTMLTokenizer::parser_did_run.
+pub func html_tokenizer_parser_did_run(this: HtmlTokenizer*):
+    # OPTIMIZATION: If we've consumed all input and the insertion point is at the start,
+    #               we can throw away the decoded input buffer to save memory.
+    if this.m_current_offset > 0 and (usize)this.m_current_offset == ak.vector_size(&this.m_decoded_input) and (this.m_insertion_point == none or this.m_insertion_point == 0) and ak.vector_is_empty(&this.m_old_insertion_points):
+        ak.vector_clear(&this.m_decoded_input)
+        this.m_current_offset = 0
+        this.m_prev_offset = 0
+
+## Ported from Libraries/LibWeb/HTML/Parser/HTMLTokenizer.cpp:2950 Web::HTML::HTMLTokenizer::unparsed_input.
+pub func html_tokenizer_unparsed_input(this: const HtmlTokenizer*) -> ak.String:
+    if this.m_current_offset < 0 or (usize)this.m_current_offset >= ak.vector_size(&this.m_decoded_input):
+        return ak.string_new()
+    var builder = ak.string_builder_new()
+    ak.string_builder_append_utf32_view(&builder, ak.utf32_view_from_span(ak.vector_span_const(&this.m_decoded_input)[(usize)this.m_current_offset..]))
+    return ak.string_builder_to_string(&builder) else trap("MUST: builder.to_string()")
+
+## Ported from Libraries/LibWeb/HTML/Parser/HTMLTokenizer.cpp:2959 Web::HTML::HTMLTokenizer::append_to_input_stream.
+pub func html_tokenizer_append_to_input_stream(this: HtmlTokenizer*, input: ak.StringView):
+    var view: ak.Utf8View
+    ak.utf8_view_construct_string_view(&view, input)
+    var it = ak.utf8_view_begin(&view)
+    while not ak.utf8_code_point_iterator_done(&it):
+        ak.vector_append_t(&this.m_decoded_input, ak.utf8_code_point_iterator_deref(&it))
+        discard(ak.utf8_code_point_iterator_inc(&it))
+
+## Ported from Libraries/LibWeb/HTML/Parser/HTMLTokenizer.cpp:2965 Web::HTML::HTMLTokenizer::close_input_stream.
+pub func html_tokenizer_close_input_stream(this: HtmlTokenizer*):
+    this.m_input_stream_closed = true
+
+## Ported from Libraries/LibWeb/HTML/Parser/HTMLTokenizer.cpp:2970 Web::HTML::HTMLTokenizer::insert_input_at_insertion_point.
+pub func html_tokenizer_insert_input_at_insertion_point(this: HtmlTokenizer*, input: ak.StringView):
+    var new_decoded_input: ak.Vector[u32]
+    ak.vector_ensure_capacity(&new_decoded_input, ak.vector_size(&this.m_decoded_input) + ak.string_view_length(&input))
+
+    let insertion_point = this.m_insertion_point else trap("VERIFY: m_insertion_point.has_value()")
+    let before = ak.vector_span(&this.m_decoded_input)[0..<(usize)insertion_point]
+    ak.vector_append_opaque(&new_decoded_input, before.data, before.length)
+
+    let utf8_to_insert = ak.string_from_utf8(input) else trap("MUST: String::from_utf8(input)")
+    var code_points_inserted: isize = 0
+    let code_points = ak.string_code_points(&utf8_to_insert)
+    var it = ak.utf8_view_begin(&code_points)
+    while not ak.utf8_code_point_iterator_done(&it):
+        ak.vector_append_t(&new_decoded_input, ak.utf8_code_point_iterator_deref(&it))
+        code_points_inserted += 1
+        discard(ak.utf8_code_point_iterator_inc(&it))
+
+    let after = ak.vector_span(&this.m_decoded_input)[(usize)insertion_point..]
+    ak.vector_append_opaque(&new_decoded_input, after.data, after.length)
+    this.m_decoded_input = new_decoded_input
+
+    this.m_insertion_point = insertion_point + code_points_inserted
+    for old_insertion_point in &ak.vector_span(&this.m_old_insertion_points):
+        if let old = *old_insertion_point:
+            if insertion_point <= old:
+                *old_insertion_point = old + code_points_inserted
+
+## Ported from Libraries/LibWeb/HTML/Parser/HTMLTokenizer.cpp:2997 Web::HTML::HTMLTokenizer::insert_eof.
+pub func html_tokenizer_insert_eof(this: HtmlTokenizer*):
+    html_tokenizer_close_input_stream(this)
+    this.m_explicit_eof_inserted = true
+
+## Ported from Libraries/LibWeb/HTML/Parser/HTMLTokenizer.cpp:3003 Web::HTML::HTMLTokenizer::is_eof_inserted.
+pub func html_tokenizer_is_eof_inserted(this: HtmlTokenizer*) -> bool:
+    return this.m_explicit_eof_inserted
+
+# mark: State changes and emission ==============================================================
+
+## Ported from Libraries/LibWeb/HTML/Parser/HTMLTokenizer.cpp:3008 Web::HTML::HTMLTokenizer::will_switch_to.
+pub func html_tokenizer_will_switch_to(this: HtmlTokenizer*, new_state: HtmlTokenizerState):
+    if tokenizer_trace_debug:
+        ak.dbgln(f"[{html_tokenizer_state_name(this.m_state)}] Switch to {html_tokenizer_state_name(new_state)}")
+
+## Ported from Libraries/LibWeb/HTML/Parser/HTMLTokenizer.cpp:3013 Web::HTML::HTMLTokenizer::will_reconsume_in.
+pub func html_tokenizer_will_reconsume_in(this: HtmlTokenizer*, new_state: HtmlTokenizerState):
+    if tokenizer_trace_debug:
+        ak.dbgln(f"[{html_tokenizer_state_name(this.m_state)}] Reconsume in {html_tokenizer_state_name(new_state)}")
+
+## Ported from Libraries/LibWeb/HTML/Parser/HTMLTokenizer.cpp:3018 Web::HTML::HTMLTokenizer::switch_to.
+pub func html_tokenizer_switch_to_html_parser(this: HtmlTokenizer*, new_state: HtmlTokenizerState):
+    if tokenizer_trace_debug:
+        ak.dbgln(f"[{html_tokenizer_state_name(this.m_state)}] Parser switches tokenizer state to {html_tokenizer_state_name(new_state)}")
+    this.m_state = new_state
+
+## Ported from Libraries/LibWeb/HTML/Parser/HTMLTokenizer.cpp:3024 Web::HTML::HTMLTokenizer::will_emit.
+pub func html_tokenizer_will_emit(this: HtmlTokenizer*, token: HtmlToken*):
+    if html_token_is_start_tag(token):
+        this.m_last_emitted_start_tag_name = html_token_tag_name(token)
+
+    let is_start_or_end_tag = html_token_type(token) == HtmlTokenType.start_tag or html_token_type(token) == HtmlTokenType.end_tag
+    html_token_set_end_position(token, html_tokenizer_nth_last_position(this, 1 if is_start_or_end_tag else 0))
+
+    if is_start_or_end_tag:
+        html_token_normalize_attributes(token)
+
+## Ported from Libraries/LibWeb/HTML/Parser/HTMLTokenizer.cpp:3036 Web::HTML::HTMLTokenizer::current_end_tag_token_is_appropriate.
+pub func html_tokenizer_current_end_tag_token_is_appropriate(this: const HtmlTokenizer*) -> bool:
+    assert(html_token_is_end_tag(&this.m_current_token))
+    let last_emitted_start_tag_name = this.m_last_emitted_start_tag_name else return false
+    let tag_name = html_token_tag_name(&this.m_current_token)
+    return ak.fly_string_eq_fly_string(&tag_name, &last_emitted_start_tag_name)
+
+## Ported from Libraries/LibWeb/HTML/Parser/HTMLTokenizer.cpp:3044 Web::HTML::HTMLTokenizer::consumed_as_part_of_an_attribute.
+pub func html_tokenizer_consumed_as_part_of_an_attribute(this: const HtmlTokenizer*) -> bool:
+    return this.m_return_state == HtmlTokenizerState.attribute_value_unquoted or this.m_return_state == HtmlTokenizerState.attribute_value_single_quoted or this.m_return_state == HtmlTokenizerState.attribute_value_double_quoted
+
+## Ported from Libraries/LibWeb/HTML/Parser/HTMLTokenizer.cpp:3049 Web::HTML::HTMLTokenizer::restore_to.
+pub func html_tokenizer_restore_to(this: HtmlTokenizer*, new_iterator: isize):
+    let diff = this.m_current_offset - new_iterator
+    if diff > 0:
+        for i in 0..<diff:
+            discard(i)
+            if not ak.vector_is_empty(&this.m_source_positions):
+                discard(ak.vector_take_last(&this.m_source_positions))
+    else:
+        # Going forwards...?
+        trap("TODO")
+    this.m_current_offset = new_iterator
+
+## Ported from Libraries/LibWeb/HTML/Parser/HTMLTokenizer.cpp:3064 Web::HTML::HTMLTokenizer::consume_current_builder.
+pub func html_tokenizer_consume_current_builder(this: HtmlTokenizer*) -> ak.String:
+    let string = ak.string_builder_to_string_without_validation(&this.m_current_builder)
+    ak.string_builder_clear(&this.m_current_builder)
+    return string
+
+## Ported from Libraries/LibWeb/HTML/Parser/HTMLTokenizer.cpp:3071 Web::HTML::HTMLTokenizer::visit_edges.
+## visitor.visit(m_parser) is dropped (DESIGN.md §4.1.3): the parser owns the tokenizer, and
+## m_parser_context is a pointer the parser keeps alive.
+pub func html_tokenizer_visit_edges(this: HtmlTokenizer*, visitor: gc.CellVisitor*):
+    return

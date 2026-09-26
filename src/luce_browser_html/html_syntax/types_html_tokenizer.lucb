@@ -8,6 +8,10 @@
 #       generator (DESIGN.md §4.4). Regenerate rather than edit, except to fill a field the
 #       generator could not map.
 #
+#       Fixed by hand (r20): m_insertion_point and m_old_insertion_points hold `isize`, the
+#       donor's ssize_t (the generator wrote i64), so that they compare and assign with
+#       m_current_offset as in C++.
+#
 #==============================================================================================
 
 # mark: HtmlTokenizer ===========================================================================
@@ -21,8 +25,8 @@ pub struct HtmlTokenizer:
     pub var m_temporary_buffer: ak.Vector[u32]
     pub var m_source: ak.String
     pub var m_decoded_input: ak.Vector[u32]
-    pub var m_insertion_point: i64?
-    pub var m_old_insertion_points: ak.Vector[i64?]
+    pub var m_insertion_point: isize?
+    pub var m_old_insertion_points: ak.Vector[isize?]
     pub var m_current_offset: isize  # C++ default: { 0 }
     pub var m_prev_offset: isize  # C++ default: { 0 }
     pub var m_current_token: HtmlToken

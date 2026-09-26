@@ -1,0 +1,213 @@
+#==============================================================================================
+#
+#   tests_entities - the named character reference matcher and its tables
+#
+#   DESCRIPTION:
+#       The donor has no unit test for Entities.cpp: these tests match every entry of
+#       Entities.json (tests_entities_table) through NamedCharacterReferenceMatcher, and pin
+#       the matcher's state after each code point to the donor's (a local oracle linking
+#       Entities.cpp and the generated NamedCharacterReferences.cpp of the reference build,
+#       .donors/luce-browser-tools/html_tokenizer_oracle, `oracle --matcher WORD`).
+#
+#==============================================================================================
+
+# mark: Every named character reference =========================================================
+
+noinline func test_every_named_character_reference():
+    for entity in entity_cases:
+        var matcher = NamedCharacterReferenceMatcher()
+        for byte in entity.name.bytes:
+            assert(named_character_reference_matcher_try_consume_ascii_char(&matcher, byte))
+        let codepoints = named_character_reference_matcher_code_points(&matcher) else trap("no match")
+        assert(codepoints.first == entity.first)
+        assert((u32)(named_character_reference_second_codepoint_value(codepoints.second) else 0) == entity.second)
+        assert(named_character_reference_matcher_overconsumed_code_points(&matcher) == 0)
+        let ends_with_semicolon = entity.name.bytes[entity.name.length - 1] == ';'
+        assert(named_character_reference_matcher_last_match_ends_with_semicolon(&matcher) == ends_with_semicolon)
+
+test "every named character reference of Entities.json":
+    test_every_named_character_reference()
+
+# mark: The tables ==============================================================================
+
+test "named_character_reference_second_codepoint_value":
+    assert(named_character_reference_second_codepoint_value(.none_) == none)
+    assert(named_character_reference_second_codepoint_value(.combining_long_solidus_overlay) == 0x0338)
+    assert(named_character_reference_second_codepoint_value(.combining_long_vertical_line_overlay) == 0x20D2)
+    assert(named_character_reference_second_codepoint_value(.hair_space) == 0x200A)
+    assert(named_character_reference_second_codepoint_value(.combining_double_low_line) == 0x0333)
+    assert(named_character_reference_second_codepoint_value(.combining_reverse_solidus_overlay) == 0x20E5)
+    assert(named_character_reference_second_codepoint_value(.variation_selector1) == 0xFE00)
+    assert(named_character_reference_second_codepoint_value(.latin_small_letter_j) == 0x006A)
+    assert(named_character_reference_second_codepoint_value(.combining_macron_below) == 0x0331)
+
+test "named_character_reference_codepoints_from_unique_index":
+    # Note: The unique index is 1-based.
+    assert(named_character_reference_codepoints_from_unique_index(0) == none)
+    let first = named_character_reference_codepoints_from_unique_index(1) else trap("none")
+    assert(first.first == 0xC6 and first.second == NamedCharacterReferenceSecondCodepoint.none_)
+    let last = named_character_reference_codepoints_from_unique_index(2231) else trap("none")
+    assert(last.first == 0x200C and last.second == NamedCharacterReferenceSecondCodepoint.none_)
+    assert(g_named_character_reference_first_layer.length == 52)
+    assert(g_named_character_reference_first_to_second_layer.length == 52)
+    assert(g_named_character_reference_second_layer.length == 630)
+    assert(g_named_character_reference_nodes.length == 3190)
+
+# mark: The matcher step by step ================================================================
+
+# Lowercase hexadecimal without leading zeros, AK's "{:x}".
+func append_hex(builder: ak.StringBuilder*, value: u32):
+    let digits = "0123456789abcdef".bytes
+    var text: u8[8]
+    var count: usize = 0
+    var rest = value
+    while true:
+        text[count] = digits[rest & 0xF]
+        rest = rest >> 4
+        count += 1
+        if rest == 0:
+            break
+    while count > 0:
+        count -= 1
+        ak.string_builder_append_u8(builder, text[count])
+
+# The oracle's `--matcher WORD`: one line per code point of `word`.
+func check_matcher(word: str, expected: str):
+    var matcher = NamedCharacterReferenceMatcher()
+    var builder = ak.string_builder_new()
+    var buffer: u8[96]
+    for character in word:
+        let c_ = (u32)character
+        let consumed = named_character_reference_matcher_try_consume_code_point(&matcher, c_)
+        append_hex(&builder, c_)
+        ak.string_builder_append(&builder, format(buffer, f" consumed={(i32)consumed} overconsumed={named_character_reference_matcher_overconsumed_code_points(&matcher)} semicolon={(i32)named_character_reference_matcher_last_match_ends_with_semicolon(&matcher)} match=") else trap("format"))
+        if let codepoints = named_character_reference_matcher_code_points(&matcher):
+            append_hex(&builder, codepoints.first)
+            let second = named_character_reference_second_codepoint_value(codepoints.second) else 0
+            ak.string_builder_append(&builder, format(buffer, f"/{second}") else trap("format"))
+        else:
+            ak.string_builder_append(&builder, "none")
+        ak.string_builder_append(&builder, "\n")
+    let actual = ak.string_builder_string_view(&builder)
+    if not ak.string_view_equals(&actual, expected):
+        print(f"word: {word}\nexpected:\n{expected}actual:\n{(str)ak.string_view_bytes(&actual)}")
+        trap("the matcher differs from the donor's")
+
+noinline func test_matcher_steps():
+    check_matcher("notindot;x", """
+        6e consumed=1 overconsumed=1 semicolon=0 match=none
+        6f consumed=1 overconsumed=2 semicolon=0 match=none
+        74 consumed=1 overconsumed=0 semicolon=0 match=ac/0
+        69 consumed=1 overconsumed=1 semicolon=0 match=ac/0
+        6e consumed=1 overconsumed=2 semicolon=0 match=ac/0
+        64 consumed=1 overconsumed=3 semicolon=0 match=ac/0
+        6f consumed=1 overconsumed=4 semicolon=0 match=ac/0
+        74 consumed=1 overconsumed=5 semicolon=0 match=ac/0
+        3b consumed=1 overconsumed=0 semicolon=1 match=22f5/824
+        78 consumed=0 overconsumed=0 semicolon=1 match=22f5/824
+        """)
+    check_matcher("1Aé&fjlig", """
+        31 consumed=0 overconsumed=0 semicolon=0 match=none
+        41 consumed=1 overconsumed=1 semicolon=0 match=none
+        e9 consumed=0 overconsumed=1 semicolon=0 match=none
+        26 consumed=0 overconsumed=1 semicolon=0 match=none
+        66 consumed=1 overconsumed=2 semicolon=0 match=none
+        6a consumed=0 overconsumed=2 semicolon=0 match=none
+        6c consumed=0 overconsumed=2 semicolon=0 match=none
+        69 consumed=0 overconsumed=2 semicolon=0 match=none
+        67 consumed=0 overconsumed=2 semicolon=0 match=none
+        """)
+    check_matcher("NotEqualTilde;", """
+        4e consumed=1 overconsumed=1 semicolon=0 match=none
+        6f consumed=1 overconsumed=2 semicolon=0 match=none
+        74 consumed=1 overconsumed=3 semicolon=0 match=none
+        45 consumed=1 overconsumed=4 semicolon=0 match=none
+        71 consumed=1 overconsumed=5 semicolon=0 match=none
+        75 consumed=1 overconsumed=6 semicolon=0 match=none
+        61 consumed=1 overconsumed=7 semicolon=0 match=none
+        6c consumed=1 overconsumed=8 semicolon=0 match=none
+        54 consumed=1 overconsumed=9 semicolon=0 match=none
+        69 consumed=1 overconsumed=10 semicolon=0 match=none
+        6c consumed=1 overconsumed=11 semicolon=0 match=none
+        64 consumed=1 overconsumed=12 semicolon=0 match=none
+        65 consumed=1 overconsumed=13 semicolon=0 match=none
+        3b consumed=1 overconsumed=0 semicolon=1 match=2242/824
+        """)
+    check_matcher("amp;", """
+        61 consumed=1 overconsumed=1 semicolon=0 match=none
+        6d consumed=1 overconsumed=2 semicolon=0 match=none
+        70 consumed=1 overconsumed=0 semicolon=0 match=26/0
+        3b consumed=1 overconsumed=0 semicolon=1 match=26/0
+        """)
+    check_matcher("AMP", """
+        41 consumed=1 overconsumed=1 semicolon=0 match=none
+        4d consumed=1 overconsumed=2 semicolon=0 match=none
+        50 consumed=1 overconsumed=0 semicolon=0 match=26/0
+        """)
+    check_matcher("ampx;", """
+        61 consumed=1 overconsumed=1 semicolon=0 match=none
+        6d consumed=1 overconsumed=2 semicolon=0 match=none
+        70 consumed=1 overconsumed=0 semicolon=0 match=26/0
+        78 consumed=0 overconsumed=0 semicolon=0 match=26/0
+        3b consumed=1 overconsumed=0 semicolon=1 match=26/0
+        """)
+    check_matcher("zwnj;", """
+        7a consumed=1 overconsumed=1 semicolon=0 match=none
+        77 consumed=1 overconsumed=2 semicolon=0 match=none
+        6e consumed=1 overconsumed=3 semicolon=0 match=none
+        6a consumed=1 overconsumed=4 semicolon=0 match=none
+        3b consumed=1 overconsumed=0 semicolon=1 match=200c/0
+        """)
+    check_matcher("Zscr;", """
+        5a consumed=1 overconsumed=1 semicolon=0 match=none
+        73 consumed=1 overconsumed=2 semicolon=0 match=none
+        63 consumed=1 overconsumed=3 semicolon=0 match=none
+        72 consumed=1 overconsumed=4 semicolon=0 match=none
+        3b consumed=1 overconsumed=0 semicolon=1 match=1d4b5/0
+        """)
+    check_matcher("a", """
+        61 consumed=1 overconsumed=1 semicolon=0 match=none
+        """)
+    check_matcher("b", """
+        62 consumed=1 overconsumed=1 semicolon=0 match=none
+        """)
+    check_matcher("Z;", """
+        5a consumed=1 overconsumed=1 semicolon=0 match=none
+        3b consumed=0 overconsumed=1 semicolon=0 match=none
+        """)
+    check_matcher("nGt;", """
+        6e consumed=1 overconsumed=1 semicolon=0 match=none
+        47 consumed=1 overconsumed=2 semicolon=0 match=none
+        74 consumed=1 overconsumed=3 semicolon=0 match=none
+        3b consumed=1 overconsumed=0 semicolon=1 match=226b/8402
+        """)
+    check_matcher("acE;", """
+        61 consumed=1 overconsumed=1 semicolon=0 match=none
+        63 consumed=1 overconsumed=2 semicolon=0 match=none
+        45 consumed=1 overconsumed=3 semicolon=0 match=none
+        3b consumed=1 overconsumed=0 semicolon=1 match=223e/819
+        """)
+    check_matcher("ThickSpace;", """
+        54 consumed=1 overconsumed=1 semicolon=0 match=none
+        68 consumed=1 overconsumed=2 semicolon=0 match=none
+        69 consumed=1 overconsumed=3 semicolon=0 match=none
+        63 consumed=1 overconsumed=4 semicolon=0 match=none
+        6b consumed=1 overconsumed=5 semicolon=0 match=none
+        53 consumed=1 overconsumed=6 semicolon=0 match=none
+        70 consumed=1 overconsumed=7 semicolon=0 match=none
+        61 consumed=1 overconsumed=8 semicolon=0 match=none
+        63 consumed=1 overconsumed=9 semicolon=0 match=none
+        65 consumed=1 overconsumed=10 semicolon=0 match=none
+        3b consumed=1 overconsumed=0 semicolon=1 match=205f/8202
+        """)
+    check_matcher("fjlig;", """
+        66 consumed=1 overconsumed=1 semicolon=0 match=none
+        6a consumed=1 overconsumed=2 semicolon=0 match=none
+        6c consumed=1 overconsumed=3 semicolon=0 match=none
+        69 consumed=1 overconsumed=4 semicolon=0 match=none
+        67 consumed=1 overconsumed=5 semicolon=0 match=none
+        3b consumed=1 overconsumed=0 semicolon=1 match=66/106
+        """)
+
+test "the matcher, code point by code point":
+    with memory.heap: test_matcher_steps()

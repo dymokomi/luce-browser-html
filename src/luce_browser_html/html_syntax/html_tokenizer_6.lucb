@@ -1,0 +1,217 @@
+#==============================================================================================
+#
+#   html_tokenizer_6 - HTMLTokenizer states: character references
+#
+#   DESCRIPTION:
+#       Port of Libraries/LibWeb/HTML/Parser/HTMLTokenizer.cpp (lines 1709-2005): the states
+#       CharacterReference to NumericCharacterReferenceEnd of next_token, one function each
+#       (see html_tokenizer_1 for how the macros map to TokenizerStep). The character
+#       reference code is a u32 that wraps on overflow, as in C++.
+#
+#==============================================================================================
+
+# mark: Named character references ==============================================================
+
+# 13.2.5.72 Character reference state, https://html.spec.whatwg.org/multipage/parsing.html#character-reference-state
+func html_tokenizer_character_reference_state(this: HtmlTokenizer*, current_input_character: u32?, stop_at_insertion_point: HtmlTokenizerStopAtInsertionPoint) -> TokenizerStep:
+    ak.vector_clear(&this.m_temporary_buffer)
+    ak.vector_append_t(&this.m_temporary_buffer, (u32)'&')
+
+    if on_ascii_alphanumeric(current_input_character):
+        this.m_named_character_reference_matcher = NamedCharacterReferenceMatcher()
+        return tokenizer_reconsume_in(this, .named_character_reference)
+    if on(current_input_character, '#'):
+        ak.vector_append_t(&this.m_temporary_buffer, input_value(current_input_character))
+        return tokenizer_switch_to_with_unclean_builder(this, .numeric_character_reference)
+    tokenizer_flush_codepoints_consumed_as_a_character_reference(this)
+    return tokenizer_reconsume_in_return_state(this, current_input_character)
+
+# 13.2.5.73 Named character reference state, https://html.spec.whatwg.org/multipage/parsing.html#named-character-reference-state
+func html_tokenizer_named_character_reference_state(this: HtmlTokenizer*, current_input_character: u32?, stop_at_insertion_point: HtmlTokenizerStopAtInsertionPoint) -> TokenizerStep:
+    if html_tokenizer_can_run_out_of_characters(this, stop_at_insertion_point):
+        # If there is an insertion point, match code-point-by-code-point to handle the possibility of
+        # document.write being used to insert a named character reference one-code-point-at-a-time. Do
+        # the same for an open input stream, since more network input can extend the reference later.
+        if let value = current_input_character:
+            if named_character_reference_matcher_try_consume_code_point(&this.m_named_character_reference_matcher, value):
+                ak.vector_append_t(&this.m_temporary_buffer, value)
+                return TokenizerStep.consume_next
+            else:
+                tokenizer_dont_consume_next_input_character(this, current_input_character)
+    else:
+        # If there's no insertion point (this is the common case), it is safe to look ahead at the rest
+        # of the input and try to match a named character reference all-at-once. This is worthwhile
+        # because matching all-at-once ends up being more efficient.
+        let starting_consumed_count = ak.vector_size(&this.m_temporary_buffer)
+        let remaining_source = ak.vector_span(&this.m_decoded_input)[(usize)this.m_prev_offset..]
+
+        for code_point in remaining_source:
+            if named_character_reference_matcher_try_consume_code_point(&this.m_named_character_reference_matcher, code_point):
+                ak.vector_append_t(&this.m_temporary_buffer, code_point)
+            else:
+                break
+
+        let num_consumed = ak.vector_size(&this.m_temporary_buffer) - starting_consumed_count
+        if num_consumed == 0:
+            tokenizer_dont_consume_next_input_character(this, current_input_character)
+        elif num_consumed > 1:
+            html_tokenizer_skip(this, num_consumed - 1)
+
+    # Only consume the characters within the longest match. It's possible that we've overconsumed code points,
+    # though, so we want to backtrack to the longest match found. For example, `&notindo` (which could still
+    # have lead to `&notindot;`) would need to backtrack back to `&not`.
+    let overconsumed_code_points = named_character_reference_matcher_overconsumed_code_points(&this.m_named_character_reference_matcher)
+    if overconsumed_code_points > 0:
+        html_tokenizer_restore_to(this, this.m_current_offset - (isize)overconsumed_code_points)
+        ak.vector_resize_and_keep_capacity(&this.m_temporary_buffer, ak.vector_size(&this.m_temporary_buffer) - overconsumed_code_points)
+
+    let mapped_codepoints = named_character_reference_matcher_code_points(&this.m_named_character_reference_matcher)
+    # If there is a match
+    if let codepoints = mapped_codepoints:
+        if html_tokenizer_consumed_as_part_of_an_attribute(this) and not named_character_reference_matcher_last_match_ends_with_semicolon(&this.m_named_character_reference_matcher):
+            let next_code_point = html_tokenizer_peek_code_point(this, 0, stop_at_insertion_point)
+            if let next = next_code_point:
+                if next == (u32)'=' or ak.is_ascii_alphanumeric(next):
+                    tokenizer_flush_codepoints_consumed_as_a_character_reference(this)
+                    return tokenizer_switch_to_return_state(this)
+
+        if not named_character_reference_matcher_last_match_ends_with_semicolon(&this.m_named_character_reference_matcher):
+            log_parse_error()
+
+        ak.vector_clear_with_capacity(&this.m_temporary_buffer)
+        ak.vector_append_t(&this.m_temporary_buffer, codepoints.first)
+        let second_codepoint = named_character_reference_second_codepoint_value(codepoints.second)
+        if let second = second_codepoint:
+            ak.vector_append_t(&this.m_temporary_buffer, (u32)second)
+
+        tokenizer_flush_codepoints_consumed_as_a_character_reference(this)
+        return tokenizer_switch_to_return_state(this)
+    tokenizer_flush_codepoints_consumed_as_a_character_reference(this)
+    return tokenizer_switch_to_with_unclean_builder(this, .ambiguous_ampersand)
+
+# 13.2.5.74 Ambiguous ampersand state, https://html.spec.whatwg.org/multipage/parsing.html#ambiguous-ampersand-state
+func html_tokenizer_ambiguous_ampersand_state(this: HtmlTokenizer*, current_input_character: u32?, stop_at_insertion_point: HtmlTokenizerStopAtInsertionPoint) -> TokenizerStep:
+    if on_ascii_alphanumeric(current_input_character):
+        if html_tokenizer_consumed_as_part_of_an_attribute(this):
+            ak.string_builder_append_code_point(&this.m_current_builder, input_value(current_input_character))
+            return TokenizerStep.consume_next
+        return tokenizer_emit_current_character(this, current_input_character)
+    if on(current_input_character, ';'):
+        log_parse_error()
+        return tokenizer_reconsume_in_return_state(this, current_input_character)
+    return tokenizer_reconsume_in_return_state(this, current_input_character)
+
+# mark: Numeric character references ============================================================
+
+# 13.2.5.75 Numeric character reference state, https://html.spec.whatwg.org/multipage/parsing.html#numeric-character-reference-state
+func html_tokenizer_numeric_character_reference_state(this: HtmlTokenizer*, current_input_character: u32?, stop_at_insertion_point: HtmlTokenizerStopAtInsertionPoint) -> TokenizerStep:
+    this.m_character_reference_code = 0
+
+    if on(current_input_character, 'X'):
+        ak.vector_append_t(&this.m_temporary_buffer, input_value(current_input_character))
+        return tokenizer_switch_to_with_unclean_builder(this, .hexadecimal_character_reference_start)
+    if on(current_input_character, 'x'):
+        ak.vector_append_t(&this.m_temporary_buffer, input_value(current_input_character))
+        return tokenizer_switch_to_with_unclean_builder(this, .hexadecimal_character_reference_start)
+    return tokenizer_reconsume_in(this, .decimal_character_reference_start)
+
+# 13.2.5.76 Hexadecimal character reference start state, https://html.spec.whatwg.org/multipage/parsing.html#hexadecimal-character-reference-start-state
+func html_tokenizer_hexadecimal_character_reference_start_state(this: HtmlTokenizer*, current_input_character: u32?, stop_at_insertion_point: HtmlTokenizerStopAtInsertionPoint) -> TokenizerStep:
+    if on_ascii_hex_digit(current_input_character):
+        return tokenizer_reconsume_in(this, .hexadecimal_character_reference)
+    log_parse_error()
+    tokenizer_flush_codepoints_consumed_as_a_character_reference(this)
+    return tokenizer_reconsume_in_return_state(this, current_input_character)
+
+# 13.2.5.77 Decimal character reference start state, https://html.spec.whatwg.org/multipage/parsing.html#decimal-character-reference-start-state
+func html_tokenizer_decimal_character_reference_start_state(this: HtmlTokenizer*, current_input_character: u32?, stop_at_insertion_point: HtmlTokenizerStopAtInsertionPoint) -> TokenizerStep:
+    if on_ascii_digit(current_input_character):
+        return tokenizer_reconsume_in(this, .decimal_character_reference)
+    log_parse_error()
+    tokenizer_flush_codepoints_consumed_as_a_character_reference(this)
+    return tokenizer_reconsume_in_return_state(this, current_input_character)
+
+# 13.2.5.78 Hexadecimal character reference state, https://html.spec.whatwg.org/multipage/parsing.html#decimal-character-reference-start-state
+func html_tokenizer_hexadecimal_character_reference_state(this: HtmlTokenizer*, current_input_character: u32?, stop_at_insertion_point: HtmlTokenizerStopAtInsertionPoint) -> TokenizerStep:
+    if on_ascii_digit(current_input_character):
+        this.m_character_reference_code = this.m_character_reference_code *% 16
+        this.m_character_reference_code = this.m_character_reference_code +% (input_value(current_input_character) - 0x30)
+        return TokenizerStep.consume_next
+    if on_ascii_hex_digit(current_input_character):
+        this.m_character_reference_code = this.m_character_reference_code *% 16
+        let hex_digit_min_ascii_value: u32 = 0x37 if ak.is_ascii_upper_alpha(input_value(current_input_character)) else 0x57
+        this.m_character_reference_code = this.m_character_reference_code +% (input_value(current_input_character) - hex_digit_min_ascii_value)
+        return TokenizerStep.consume_next
+    if on(current_input_character, ';'):
+        return tokenizer_switch_to_with_unclean_builder(this, .numeric_character_reference_end)
+    log_parse_error()
+    return tokenizer_reconsume_in(this, .numeric_character_reference_end)
+
+# 13.2.5.79 Decimal character reference state, https://html.spec.whatwg.org/multipage/parsing.html#decimal-character-reference-state
+func html_tokenizer_decimal_character_reference_state(this: HtmlTokenizer*, current_input_character: u32?, stop_at_insertion_point: HtmlTokenizerStopAtInsertionPoint) -> TokenizerStep:
+    if on_ascii_digit(current_input_character):
+        this.m_character_reference_code = this.m_character_reference_code *% 10
+        this.m_character_reference_code = this.m_character_reference_code +% (input_value(current_input_character) - 0x30)
+        return TokenizerStep.consume_next
+    if on(current_input_character, ';'):
+        return tokenizer_switch_to_with_unclean_builder(this, .numeric_character_reference_end)
+    log_parse_error()
+    return tokenizer_reconsume_in(this, .numeric_character_reference_end)
+
+# The numeric character reference end state's conversion_table: { number, code_point }.
+let numeric_character_reference_conversion_table: (u32, u32)[27] = [
+    (0x80, 0x20AC),
+    (0x82, 0x201A),
+    (0x83, 0x0192),
+    (0x84, 0x201E),
+    (0x85, 0x2026),
+    (0x86, 0x2020),
+    (0x87, 0x2021),
+    (0x88, 0x02C6),
+    (0x89, 0x2030),
+    (0x8A, 0x0160),
+    (0x8B, 0x2039),
+    (0x8C, 0x0152),
+    (0x8E, 0x017D),
+    (0x91, 0x2018),
+    (0x92, 0x2019),
+    (0x93, 0x201C),
+    (0x94, 0x201D),
+    (0x95, 0x2022),
+    (0x96, 0x2013),
+    (0x97, 0x2014),
+    (0x98, 0x02DC),
+    (0x99, 0x2122),
+    (0x9A, 0x0161),
+    (0x9B, 0x203A),
+    (0x9C, 0x0153),
+    (0x9E, 0x017E),
+    (0x9F, 0x0178),
+]
+
+# 13.2.5.80 Numeric character reference end state, https://html.spec.whatwg.org/multipage/parsing.html#numeric-character-reference-end-state
+func html_tokenizer_numeric_character_reference_end_state(this: HtmlTokenizer*, current_input_character: u32?, stop_at_insertion_point: HtmlTokenizerStopAtInsertionPoint) -> TokenizerStep:
+    tokenizer_dont_consume_next_input_character(this, current_input_character)
+
+    if this.m_character_reference_code == 0:
+        log_parse_error()
+        this.m_character_reference_code = 0xFFFD
+    if this.m_character_reference_code > 0x10ffff:
+        log_parse_error()
+        this.m_character_reference_code = 0xFFFD
+    if ak.is_unicode_surrogate(this.m_character_reference_code):
+        log_parse_error()
+        this.m_character_reference_code = 0xFFFD
+    if ak.is_unicode_noncharacter(this.m_character_reference_code):
+        log_parse_error()
+    if this.m_character_reference_code == 0xd or (ak.is_unicode_control(this.m_character_reference_code) and not ak.is_ascii_space(this.m_character_reference_code)):
+        log_parse_error()
+        for entry in numeric_character_reference_conversion_table:
+            if this.m_character_reference_code == entry.0:
+                this.m_character_reference_code = entry.1
+                break
+
+    ak.vector_clear(&this.m_temporary_buffer)
+    ak.vector_append_t(&this.m_temporary_buffer, this.m_character_reference_code)
+    tokenizer_flush_codepoints_consumed_as_a_character_reference(this)
+    return tokenizer_switch_to_return_state(this)

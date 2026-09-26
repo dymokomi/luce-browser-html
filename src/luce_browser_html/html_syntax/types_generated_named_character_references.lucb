@@ -8,6 +8,10 @@
 #       the skeleton generator (DESIGN.md §4.4). Regenerate rather than edit, except to fill a
 #       field the generator could not map.
 #
+#       Fixed by hand (r20): the four `extern` tables g_named_character_reference_nodes,
+#       _first_layer, _first_to_second_layer and _second_layer are not `var` pointers here; they
+#       are the `let` arrays of named_character_reference_tables.lucb.
+#
 #==============================================================================================
 
 ## Web::HTML::NamedCharacterReferenceSecondCodepoint (Build/Libraries/LibWeb/HTML/Parser/NamedCharacterReferences.h:10).
@@ -60,15 +64,3 @@ pub struct NamedCharacterReferenceNode:
     pub var end_of_word: bool  # bit-field : 1
     pub var child_index: u16  # bit-field : 12
     pub var children_len: u16  # bit-field : 4
-
-## Web::HTML::g_named_character_reference_nodes (Build/Libraries/LibWeb/HTML/Parser/NamedCharacterReferences.h:111).
-pub var g_named_character_reference_nodes: NamedCharacterReferenceNode*?
-
-## Web::HTML::g_named_character_reference_first_layer (Build/Libraries/LibWeb/HTML/Parser/NamedCharacterReferences.h:112).
-pub var g_named_character_reference_first_layer: NamedCharacterReferenceFirstLayerNode*?
-
-## Web::HTML::g_named_character_reference_first_to_second_layer (Build/Libraries/LibWeb/HTML/Parser/NamedCharacterReferences.h:113).
-pub var g_named_character_reference_first_to_second_layer: NamedCharacterReferenceFirstToSecondLayerLink*?
-
-## Web::HTML::g_named_character_reference_second_layer (Build/Libraries/LibWeb/HTML/Parser/NamedCharacterReferences.h:114).
-pub var g_named_character_reference_second_layer: NamedCharacterReferenceSecondLayerNode*?

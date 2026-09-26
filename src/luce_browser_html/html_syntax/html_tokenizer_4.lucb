@@ -1,0 +1,195 @@
+#==============================================================================================
+#
+#   html_tokenizer_4 - HTMLTokenizer states: attributes and self-closing start tags
+#
+#   DESCRIPTION:
+#       Port of Libraries/LibWeb/HTML/Parser/HTMLTokenizer.cpp (lines 1138-1485): the states
+#       BeforeAttributeName to AfterAttributeValueQuoted of next_token, one function each (see
+#       html_tokenizer_1 for how the macros map to TokenizerStep).
+#
+#==============================================================================================
+
+# mark: Attribute names =========================================================================
+
+# 13.2.5.32 Before attribute name state, https://html.spec.whatwg.org/multipage/parsing.html#before-attribute-name-state
+func html_tokenizer_before_attribute_name_state(this: HtmlTokenizer*, current_input_character: u32?, stop_at_insertion_point: HtmlTokenizerStopAtInsertionPoint) -> TokenizerStep:
+    if on_whitespace(current_input_character):
+        return TokenizerStep.consume_next
+    if on(current_input_character, '/'):
+        return tokenizer_reconsume_in(this, .after_attribute_name)
+    if on(current_input_character, '>'):
+        return tokenizer_reconsume_in(this, .after_attribute_name)
+    if on_eof(current_input_character):
+        return tokenizer_reconsume_in(this, .after_attribute_name)
+    if on(current_input_character, '='):
+        log_parse_error()
+        var new_attribute = html_token_attribute_new()
+        new_attribute.name_start_position = html_tokenizer_nth_last_position(this, 1)
+        ak.string_builder_append_code_point(&this.m_current_builder, input_value(current_input_character))
+        html_token_add_attribute(&this.m_current_token, new_attribute)
+        return tokenizer_switch_to_with_unclean_builder(this, .attribute_name)
+    var new_attribute = html_token_attribute_new()
+    new_attribute.name_start_position = html_tokenizer_nth_last_position(this, 1)
+    html_token_add_attribute(&this.m_current_token, new_attribute)
+    return tokenizer_reconsume_in(this, .attribute_name)
+
+# 13.2.5.40 Self-closing start tag state, https://html.spec.whatwg.org/multipage/parsing.html#self-closing-start-tag-state
+func html_tokenizer_self_closing_start_tag_state(this: HtmlTokenizer*, current_input_character: u32?, stop_at_insertion_point: HtmlTokenizerStopAtInsertionPoint) -> TokenizerStep:
+    if on(current_input_character, '>'):
+        html_token_set_self_closing(&this.m_current_token, true)
+        return tokenizer_switch_to_and_emit_current_token(this, .data)
+    if on_eof(current_input_character):
+        log_parse_error()
+        return tokenizer_emit_eof(this)
+    log_parse_error()
+    return tokenizer_reconsume_in(this, .before_attribute_name)
+
+# The attribute name state's end of the name: its end position and the name from the builder.
+func html_tokenizer_finish_attribute_name(this: HtmlTokenizer*):
+    html_token_last_attribute(&this.m_current_token).name_end_position = html_tokenizer_nth_last_position(this, 1)
+    html_token_last_attribute(&this.m_current_token).local_name = ak.fly_string_from_string(html_tokenizer_consume_current_builder(this))
+
+# 13.2.5.33 Attribute name state, https://html.spec.whatwg.org/multipage/parsing.html#attribute-name-state
+func html_tokenizer_attribute_name_state(this: HtmlTokenizer*, current_input_character: u32?, stop_at_insertion_point: HtmlTokenizerStopAtInsertionPoint) -> TokenizerStep:
+    if on_whitespace(current_input_character):
+        html_tokenizer_finish_attribute_name(this)
+        return tokenizer_reconsume_in(this, .after_attribute_name)
+    if on(current_input_character, '/'):
+        html_tokenizer_finish_attribute_name(this)
+        return tokenizer_reconsume_in(this, .after_attribute_name)
+    if on(current_input_character, '>'):
+        html_tokenizer_finish_attribute_name(this)
+        return tokenizer_reconsume_in(this, .after_attribute_name)
+    if on_eof(current_input_character):
+        html_tokenizer_finish_attribute_name(this)
+        return tokenizer_reconsume_in(this, .after_attribute_name)
+    if on(current_input_character, '='):
+        html_tokenizer_finish_attribute_name(this)
+        return tokenizer_switch_to(this, .before_attribute_value)
+    if on_ascii_upper_alpha(current_input_character):
+        ak.string_builder_append_code_point(&this.m_current_builder, ak.to_ascii_lowercase(input_value(current_input_character)))
+        return TokenizerStep.consume_next
+    if on(current_input_character, 0):
+        log_parse_error()
+        ak.string_builder_append_code_point(&this.m_current_builder, 0xFFFD)
+        return TokenizerStep.consume_next
+    # ON('"'), ON('\'') and ON('<') log a parse error and `goto AnythingElseAttributeName`.
+    if on(current_input_character, '"') or on(current_input_character, '\'') or on(current_input_character, '<'):
+        log_parse_error()
+    # AnythingElseAttributeName:
+    ak.string_builder_append_code_point(&this.m_current_builder, input_value(current_input_character))
+    return TokenizerStep.consume_next
+
+# 13.2.5.34 After attribute name state, https://html.spec.whatwg.org/multipage/parsing.html#after-attribute-name-state
+func html_tokenizer_after_attribute_name_state(this: HtmlTokenizer*, current_input_character: u32?, stop_at_insertion_point: HtmlTokenizerStopAtInsertionPoint) -> TokenizerStep:
+    if on_whitespace(current_input_character):
+        return TokenizerStep.consume_next
+    if on(current_input_character, '/'):
+        return tokenizer_switch_to(this, .self_closing_start_tag)
+    if on(current_input_character, '='):
+        html_token_last_attribute(&this.m_current_token).name_end_position = html_tokenizer_nth_last_position(this, 1)
+        return tokenizer_switch_to(this, .before_attribute_value)
+    if on(current_input_character, '>'):
+        return tokenizer_switch_to_and_emit_current_token(this, .data)
+    if on_eof(current_input_character):
+        log_parse_error()
+        return tokenizer_emit_eof(this)
+    html_token_add_attribute(&this.m_current_token, html_token_attribute_new())
+    if not ak.vector_is_empty(&this.m_source_positions):
+        html_token_last_attribute(&this.m_current_token).name_start_position = html_tokenizer_nth_last_position(this, 1)
+    return tokenizer_reconsume_in(this, .attribute_name)
+
+# mark: Attribute values ========================================================================
+
+# 13.2.5.35 Before attribute value state, https://html.spec.whatwg.org/multipage/parsing.html#before-attribute-value-state
+func html_tokenizer_before_attribute_value_state(this: HtmlTokenizer*, current_input_character: u32?, stop_at_insertion_point: HtmlTokenizerStopAtInsertionPoint) -> TokenizerStep:
+    html_token_last_attribute(&this.m_current_token).value_start_position = html_tokenizer_nth_last_position(this, 1)
+    if on_whitespace(current_input_character):
+        return TokenizerStep.consume_next
+    if on(current_input_character, '"'):
+        return tokenizer_switch_to(this, .attribute_value_double_quoted)
+    if on(current_input_character, '\''):
+        return tokenizer_switch_to(this, .attribute_value_single_quoted)
+    if on(current_input_character, '>'):
+        log_parse_error()
+        return tokenizer_switch_to_and_emit_current_token(this, .data)
+    return tokenizer_reconsume_in(this, .attribute_value_unquoted)
+
+# 13.2.5.36 Attribute value (double-quoted) state, https://html.spec.whatwg.org/multipage/parsing.html#attribute-value-(double-quoted)-state
+func html_tokenizer_attribute_value_double_quoted_state(this: HtmlTokenizer*, current_input_character: u32?, stop_at_insertion_point: HtmlTokenizerStopAtInsertionPoint) -> TokenizerStep:
+    if on(current_input_character, '"'):
+        html_token_last_attribute(&this.m_current_token).value = html_tokenizer_consume_current_builder(this)
+        return tokenizer_switch_to(this, .after_attribute_value_quoted)
+    if on(current_input_character, '&'):
+        this.m_return_state = HtmlTokenizerState.attribute_value_double_quoted
+        return tokenizer_switch_to_with_unclean_builder(this, .character_reference)
+    if on(current_input_character, 0):
+        log_parse_error()
+        ak.string_builder_append_code_point(&this.m_current_builder, 0xFFFD)
+        return TokenizerStep.consume_next
+    if on_eof(current_input_character):
+        log_parse_error()
+        return tokenizer_emit_eof(this)
+    ak.string_builder_append_code_point(&this.m_current_builder, input_value(current_input_character))
+    return TokenizerStep.consume_next
+
+# 13.2.5.37 Attribute value (single-quoted) state, https://html.spec.whatwg.org/multipage/parsing.html#attribute-value-(single-quoted)-state
+func html_tokenizer_attribute_value_single_quoted_state(this: HtmlTokenizer*, current_input_character: u32?, stop_at_insertion_point: HtmlTokenizerStopAtInsertionPoint) -> TokenizerStep:
+    if on(current_input_character, '\''):
+        html_token_last_attribute(&this.m_current_token).value = html_tokenizer_consume_current_builder(this)
+        return tokenizer_switch_to(this, .after_attribute_value_quoted)
+    if on(current_input_character, '&'):
+        this.m_return_state = HtmlTokenizerState.attribute_value_single_quoted
+        return tokenizer_switch_to_with_unclean_builder(this, .character_reference)
+    if on(current_input_character, 0):
+        log_parse_error()
+        ak.string_builder_append_code_point(&this.m_current_builder, 0xFFFD)
+        return TokenizerStep.consume_next
+    if on_eof(current_input_character):
+        log_parse_error()
+        return tokenizer_emit_eof(this)
+    ak.string_builder_append_code_point(&this.m_current_builder, input_value(current_input_character))
+    return TokenizerStep.consume_next
+
+# 13.2.5.38 Attribute value (unquoted) state, https://html.spec.whatwg.org/multipage/parsing.html#attribute-value-(single-quoted)-state
+func html_tokenizer_attribute_value_unquoted_state(this: HtmlTokenizer*, current_input_character: u32?, stop_at_insertion_point: HtmlTokenizerStopAtInsertionPoint) -> TokenizerStep:
+    if on_whitespace(current_input_character):
+        html_token_last_attribute(&this.m_current_token).value = html_tokenizer_consume_current_builder(this)
+        html_token_last_attribute(&this.m_current_token).value_end_position = html_tokenizer_nth_last_position(this, 1)
+        return tokenizer_switch_to(this, .before_attribute_name)
+    if on(current_input_character, '&'):
+        this.m_return_state = HtmlTokenizerState.attribute_value_unquoted
+        return tokenizer_switch_to_with_unclean_builder(this, .character_reference)
+    if on(current_input_character, '>'):
+        html_token_last_attribute(&this.m_current_token).value = html_tokenizer_consume_current_builder(this)
+        html_token_last_attribute(&this.m_current_token).value_end_position = html_tokenizer_nth_last_position(this, 1)
+        return tokenizer_switch_to_and_emit_current_token(this, .data)
+    if on(current_input_character, 0):
+        log_parse_error()
+        ak.string_builder_append_code_point(&this.m_current_builder, 0xFFFD)
+        return TokenizerStep.consume_next
+    # ON('"'), ON('\''), ON('<'), ON('=') and ON('`') log a parse error and
+    # `goto AnythingElseAttributeValueUnquoted`.
+    if on(current_input_character, '"') or on(current_input_character, '\'') or on(current_input_character, '<') or on(current_input_character, '=') or on(current_input_character, '`'):
+        log_parse_error()
+    elif on_eof(current_input_character):
+        log_parse_error()
+        return tokenizer_emit_eof(this)
+    # AnythingElseAttributeValueUnquoted:
+    ak.string_builder_append_code_point(&this.m_current_builder, input_value(current_input_character))
+    return TokenizerStep.consume_next
+
+# 13.2.5.39 After attribute value (quoted) state, https://html.spec.whatwg.org/multipage/parsing.html#after-attribute-value-(quoted)-state
+func html_tokenizer_after_attribute_value_quoted_state(this: HtmlTokenizer*, current_input_character: u32?, stop_at_insertion_point: HtmlTokenizerStopAtInsertionPoint) -> TokenizerStep:
+    html_token_last_attribute(&this.m_current_token).value_end_position = html_tokenizer_nth_last_position(this, 1)
+    if on_whitespace(current_input_character):
+        return tokenizer_switch_to(this, .before_attribute_name)
+    if on(current_input_character, '/'):
+        return tokenizer_switch_to(this, .self_closing_start_tag)
+    if on(current_input_character, '>'):
+        return tokenizer_switch_to_and_emit_current_token(this, .data)
+    if on_eof(current_input_character):
+        log_parse_error()
+        return tokenizer_emit_eof(this)
+    log_parse_error()
+    return tokenizer_reconsume_in(this, .before_attribute_name)

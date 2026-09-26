@@ -1,0 +1,260 @@
+#==============================================================================================
+#
+#   dafsa - the DAFSA of the named character references and its numbering
+#
+#   DESCRIPTION:
+#       Port of the Node and DafsaBuilder classes and the node-data functions of
+#       generate_libweb_html_named_character_references.py. From the Python script's header:
+#
+#       First, a deterministic acyclic finite state automaton (DAFSA) is constructed from the
+#       set of named character references. The nodes in the DAFSA are populated with a
+#       "number" field that represents the count of all possible valid words from that node.
+#       This "number" field allows for minimal perfect hashing, where each word in the set
+#       corresponds to a unique index. The unique index of a word in the set is calculated
+#       during traversal/search of the DAFSA:
+#       - For any non-matching node that is iterated when searching a list of children, add
+#         their number to the unique index
+#       - For nodes that match the current character, if the node is a valid end-of-word, add
+#         1 to the unique index
+#
+#       The 'first layer' of nodes is extracted into a lookup table and the 'second layer' is
+#       searched with a 52-bit mask per first character (see emit.lucb); after the second
+#       layer, the "number" of each child is cumulative over its previous siblings and each
+#       node stores the length of its list of children.
+#
+#       The Python dicts keyed by node identity become fields of the node: `child_index` is
+#       `child_indexes[id(node)]`, and the minimized-node dict is an open-addressing table.
+#
+#==============================================================================================
+
+# mark: Nodes ===================================================================================
+
+## A DAFSA node: a child per ASCII character.
+struct Node:
+    var children: (Node*?)[128]
+    var is_terminal: bool
+    var number: usize
+    ## child_indexes[id(node)], when the node has an entry.
+    var child_index: usize?
+
+func node_num_direct_children(node: const Node*) -> usize:
+    var count: usize = 0
+    for child in node.children:
+        if child != none:
+            count += 1
+    return count
+
+func is_ascii_alpha(c_: usize) -> bool:
+    return (0x41 <= c_ and c_ <= 0x5A) or (0x61 <= c_ and c_ <= 0x7A)
+
+func ascii_alphabetic_to_index(c_: usize) -> usize:
+    assert(is_ascii_alpha(c_))
+    return (c_ - 0x41) if c_ <= 0x5A else (c_ - 0x61 + 26)
+
+func node_get_ascii_alphabetic_bit_mask(node: const Node*) -> u64:
+    var mask: u64 = 0
+    for (i, child) in node.children.indexed():
+        if child == none:
+            continue
+        mask = mask | ((u64)1 << ascii_alphabetic_to_index(i))
+    return mask
+
+func calc_numbers(node: Node*):
+    node.number = 1 if node.is_terminal else 0
+    for child in node.children:
+        if let c_ = child:
+            calc_numbers(c_)
+            node.number += c_.number
+
+# node_key(n): equality matches the C++ NodeTraits: identity of each child slot + terminal flag.
+func node_keys_equal(a: const Node*, b: const Node*) -> bool:
+    if a.is_terminal != b.is_terminal:
+        return false
+    for i: usize in 0..<128:
+        if a.children[i] != b.children[i]:
+            return false
+    return true
+
+func node_key_hash(node: const Node*) -> u64:
+    var h: u64 = 0xcbf29ce484222325 if node.is_terminal else 0x84222325cbf29ce4
+    for child in node.children:
+        var word: u64 = 0
+        if let c_ = child:
+            word = (u64)(usize)c_
+        h = (h ^ word) *% 0x100000001b3
+    return h
+
+# mark: DafsaBuilder ============================================================================
+
+## (parent, character_index, child) of the words still being minimized.
+struct UncheckedNode:
+    var parent: Node*
+    var character_index: usize
+    var child: Node*
+
+let minimized_table_size: usize = 16384
+
+## The DAFSA under construction.
+struct DafsaBuilder:
+    var root: Node*
+    ## minimized_nodes: node_key -> Node, open addressing by node_key_hash.
+    var minimized_nodes: (Node*?)[]
+    var unchecked_nodes: UncheckedNode[]
+    var unchecked_count: usize
+    var previous_word: str
+
+func dafsa_builder_create() -> DafsaBuilder!:
+    return DafsaBuilder(root = try new Node, minimized_nodes = try new (Node*?)[minimized_table_size],
+        unchecked_nodes = try alloc UncheckedNode[64], unchecked_count = 0, previous_word = "")
+
+func dafsa_builder_insert(this: DafsaBuilder*, s: str) -> !:
+    if not (s > this.previous_word):
+        error(invalid_entities, "insertion order: the names of Entities.json are not sorted")
+
+    var common_prefix_len: usize = 0
+    let minimum = s.length if s.length < this.previous_word.length else this.previous_word.length
+    for i in 0..<minimum:
+        if s.bytes[i] != this.previous_word.bytes[i]:
+            break
+        common_prefix_len += 1
+
+    dafsa_builder_minimize(this, common_prefix_len)
+
+    var node = this.root
+    if this.unchecked_count > 0:
+        node = this.unchecked_nodes[this.unchecked_count - 1].child
+
+    for ch in s.bytes[common_prefix_len..]:
+        let c_ = (usize)ch
+        assert(node.children[c_] == none)
+        let child = try new Node
+        node.children[c_] = child
+        if this.unchecked_count == this.unchecked_nodes.length:
+            error(invalid_entities, "a name is too long")
+        this.unchecked_nodes[this.unchecked_count] = UncheckedNode(parent = node, character_index = c_, child = child)
+        this.unchecked_count += 1
+        node = child
+    node.is_terminal = true
+
+    this.previous_word = s
+
+func dafsa_builder_minimize(this: DafsaBuilder*, down_to: usize):
+    if this.unchecked_count == 0:
+        return
+    while this.unchecked_count > down_to:
+        this.unchecked_count -= 1
+        let unchecked = this.unchecked_nodes[this.unchecked_count]
+        # existing = self.minimized_nodes.get(node_key(child))
+        var slot = (usize)(node_key_hash(unchecked.child) % (u64)minimized_table_size)
+        var existing: Node*? = none
+        while let candidate = this.minimized_nodes[slot]:
+            if node_keys_equal(candidate, unchecked.child):
+                existing = candidate
+                break
+            slot = (slot + 1) % minimized_table_size
+        if let node = existing:
+            unchecked.parent.children[unchecked.character_index] = node
+        else:
+            this.minimized_nodes[slot] = unchecked.child
+
+func dafsa_builder_calc_numbers(this: DafsaBuilder*):
+    calc_numbers(this.root)
+
+func dafsa_builder_get_unique_index(this: const DafsaBuilder*, s: str) -> usize?:
+    var index: usize = 0
+    var node = this.root
+    for ch in s.bytes:
+        let c_ = (usize)ch
+        let next = node.children[c_] else return none
+        for sibling_c: usize in 0..<128:
+            if let sibling = node.children[sibling_c]:
+                if sibling_c < c_:
+                    index += sibling.number
+        node = next
+        if node.is_terminal:
+            index += 1
+    return index
+
+# mark: Node data ===============================================================================
+
+## One row of g_named_character_reference_nodes: (character, number, end_of_word,
+## child_index, children_len).
+struct NodeData:
+    var character: usize
+    var number: usize
+    var end_of_word: bool
+    var child_index: usize
+    var children_len: usize
+
+## The Python generator's `queue` list and the `node_data` list it fills.
+struct NodeQueue:
+    var nodes: Node*[]
+    var length: usize
+    var head: usize
+
+func node_queue_append(queue: NodeQueue*, node: Node*) -> !:
+    if queue.length == queue.nodes.length:
+        error(invalid_entities, "the node queue is full")
+    queue.nodes[queue.length] = node
+    queue.length += 1
+
+func queue_children(node: Node*, queue: NodeQueue*, first_available_index: usize) -> usize!:
+    var current_available_index = first_available_index
+    for child in node.children:
+        let c_ = child else continue
+        if c_.child_index == none:
+            let child_num_children = node_num_direct_children(c_)
+            if child_num_children > 0:
+                c_.child_index = current_available_index
+                current_available_index += child_num_children
+            try node_queue_append(queue, c_)
+    return current_available_index
+
+func write_children_data(node: Node*, node_data: NodeData[], node_data_count: usize*, queue: NodeQueue*, first_available_index: usize) -> usize!:
+    var current_available_index = first_available_index
+    var unique_index_tally: usize = 0
+    for (c_, child) in node.children.indexed():
+        let child_node = child else continue
+        let child_num_children = node_num_direct_children(child_node)
+
+        if child_node.child_index == none:
+            if child_num_children > 0:
+                child_node.child_index = current_available_index
+                current_available_index += child_num_children
+            try node_queue_append(queue, child_node)
+
+        if *node_data_count == node_data.length:
+            error(invalid_entities, "too many DAFSA nodes")
+        node_data[*node_data_count] = NodeData(character = c_, number = unique_index_tally, end_of_word = child_node.is_terminal,
+            child_index = child_node.child_index else 0, children_len = child_num_children)
+        *node_data_count += 1
+
+        unique_index_tally += child_node.number
+    return current_available_index
+
+## The rows of g_named_character_reference_nodes after the unused node 0; the second layer's
+## child indexes are left in the nodes.
+func write_node_data(dafsa_builder: DafsaBuilder*) -> NodeData[]!:
+    var queue = NodeQueue(nodes = try alloc Node*[1 << 16], length = 0, head = 0)
+    var node_data = try alloc NodeData[1 << 14]
+    var node_data_count: usize = 0
+
+    var first_available_index: usize = 1
+    first_available_index = try queue_children(dafsa_builder.root, &queue, first_available_index)
+
+    # child_indexes.clear(): the entries so far are the first layer's.
+    for i in 0..<queue.length:
+        queue.nodes[i].child_index = none
+    first_available_index = 1
+    let second_layer_length = queue.length
+    for i in 0..<second_layer_length:
+        discard(i)
+        let node = queue.nodes[queue.head]
+        queue.head += 1
+        first_available_index = try queue_children(node, &queue, first_available_index)
+
+    while queue.head < queue.length:
+        let node = queue.nodes[queue.head]
+        queue.head += 1
+        first_available_index = try write_children_data(node, node_data, &node_data_count, &queue, first_available_index)
+    return node_data[..<node_data_count]

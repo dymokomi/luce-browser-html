@@ -1,0 +1,59 @@
+#==============================================================================================
+#
+#   tests_gc_stress - the tokenizer on the collected heap, collecting on every allocation
+#
+#   DESCRIPTION:
+#       In the engine the tokenizer's AK storage (the decoded input, the queue, the builder,
+#       the tokens' strings and attribute lists) lives on the GC heap as blobs (DESIGN.md
+#       §3.3). These tests run the regression case of TestHTMLTokenizer and a few donor-pinned
+#       cases with a gc.Heap as the current allocator and a collection before every
+#       allocation (LibGC's diagnostic mode), so that any storage only reachable from outside
+#       the scanned memory would be freed and the results would differ. Names stay at most
+#       seven bytes: longer FlyStrings are interned in ak's process-wide table.
+#
+#==============================================================================================
+
+func stress_no_embedder_roots(context: void*?, roots: gc.GcHashMap[gc.HeapRoot]*):
+    return
+
+# How many collections swept, counted by a sweep callback.
+var stress_sweeps: usize
+
+func stress_count_sweep(context: void*?):
+    stress_sweeps += 1
+
+# Runs `body` with a collecting heap as the current allocator; answers how many collections ran.
+noinline func run_under_collecting_heap(body: func() -> unit) -> usize:
+    let heap = (new gc.Heap in memory.heap) else trap("out of memory")
+    gc.heap_construct(heap, ak.Function1[gc.GcHashMap[gc.HeapRoot]*, unit](call = stress_no_embedder_roots, context = none))
+    stress_sweeps = 0
+    gc.heap_register_sweep_callback(heap, ak.Function0[unit](call = stress_count_sweep, context = none))
+    gc.heap_set_should_collect_on_every_allocation(heap, true)
+    let view: memory.Allocator = heap
+    with view:
+        body()
+    gc.heap_set_should_collect_on_every_allocation(heap, false)
+    gc.heap_destroy(heap)
+    free(heap) in memory.heap
+    return stress_sweeps
+
+noinline func stress_regression():
+    var tokens = run_tokenizer(tokenizer_test_html)
+    let tokens_hash = hash_tokens(&tokens)
+    assert(tokens_hash == 3657343287)
+
+test "gc stress: the regression case":
+    # 664 collections on the day this was written.
+    assert(run_under_collecting_heap(stress_regression) > 500)
+
+noinline func stress_cases():
+    check_case("<!DOCTYPE html PUBLIC 'x' \"y\" z>", -1,
+        "DOCTYPE name=html public=x system=y quirks=0 @0:11-0:32\nEOF @0:32-0:32\n")
+    check_case("<a href=\"?a=1&amp=2&amp;b&copy=3&copy;&copyx&copy\">", -1,
+        "StartTag a self_closing=0 dup=0 attributes=1 [href=?a=1&amp=2&b&copy=3\u{A9}&copyx\u{A9} 0:3-0:7 0:8-0:50] @0:1-0:50\nEOF @0:51-0:51\n")
+    check_case("<p a=1 a=2 A=3>", -1,
+        "StartTag p self_closing=0 dup=1 attributes=1 [a=1 0:3-0:4 0:5-0:6] @0:1-0:14\nEOF @0:15-0:15\n")
+
+test "gc stress: donor-pinned cases":
+    # 49 collections on the day this was written.
+    assert(run_under_collecting_heap(stress_cases) > 30)
