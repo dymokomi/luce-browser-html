@@ -13,7 +13,7 @@
 
 # mark: Every named character reference =========================================================
 
-noinline func test_every_named_character_reference():
+test "every named character reference of Entities.json":
     for entity in entity_cases:
         var matcher = NamedCharacterReferenceMatcher()
         for byte in entity.name.bytes:
@@ -24,9 +24,6 @@ noinline func test_every_named_character_reference():
         assert(named_character_reference_matcher_overconsumed_code_points(&matcher) == 0)
         let ends_with_semicolon = entity.name.bytes[entity.name.length - 1] == ';'
         assert(named_character_reference_matcher_last_match_ends_with_semicolon(&matcher) == ends_with_semicolon)
-
-test "every named character reference of Entities.json":
-    test_every_named_character_reference()
 
 # mark: The tables ==============================================================================
 
@@ -93,121 +90,119 @@ func check_matcher(word: str, expected: str):
         print(f"word: {word}\nexpected:\n{expected}actual:\n{(str)ak.string_view_bytes(&actual)}")
         trap("the matcher differs from the donor's")
 
-noinline func test_matcher_steps():
-    check_matcher("notindot;x", """
-        6e consumed=1 overconsumed=1 semicolon=0 match=none
-        6f consumed=1 overconsumed=2 semicolon=0 match=none
-        74 consumed=1 overconsumed=0 semicolon=0 match=ac/0
-        69 consumed=1 overconsumed=1 semicolon=0 match=ac/0
-        6e consumed=1 overconsumed=2 semicolon=0 match=ac/0
-        64 consumed=1 overconsumed=3 semicolon=0 match=ac/0
-        6f consumed=1 overconsumed=4 semicolon=0 match=ac/0
-        74 consumed=1 overconsumed=5 semicolon=0 match=ac/0
-        3b consumed=1 overconsumed=0 semicolon=1 match=22f5/824
-        78 consumed=0 overconsumed=0 semicolon=1 match=22f5/824
-        """)
-    check_matcher("1Aé&fjlig", """
-        31 consumed=0 overconsumed=0 semicolon=0 match=none
-        41 consumed=1 overconsumed=1 semicolon=0 match=none
-        e9 consumed=0 overconsumed=1 semicolon=0 match=none
-        26 consumed=0 overconsumed=1 semicolon=0 match=none
-        66 consumed=1 overconsumed=2 semicolon=0 match=none
-        6a consumed=0 overconsumed=2 semicolon=0 match=none
-        6c consumed=0 overconsumed=2 semicolon=0 match=none
-        69 consumed=0 overconsumed=2 semicolon=0 match=none
-        67 consumed=0 overconsumed=2 semicolon=0 match=none
-        """)
-    check_matcher("NotEqualTilde;", """
-        4e consumed=1 overconsumed=1 semicolon=0 match=none
-        6f consumed=1 overconsumed=2 semicolon=0 match=none
-        74 consumed=1 overconsumed=3 semicolon=0 match=none
-        45 consumed=1 overconsumed=4 semicolon=0 match=none
-        71 consumed=1 overconsumed=5 semicolon=0 match=none
-        75 consumed=1 overconsumed=6 semicolon=0 match=none
-        61 consumed=1 overconsumed=7 semicolon=0 match=none
-        6c consumed=1 overconsumed=8 semicolon=0 match=none
-        54 consumed=1 overconsumed=9 semicolon=0 match=none
-        69 consumed=1 overconsumed=10 semicolon=0 match=none
-        6c consumed=1 overconsumed=11 semicolon=0 match=none
-        64 consumed=1 overconsumed=12 semicolon=0 match=none
-        65 consumed=1 overconsumed=13 semicolon=0 match=none
-        3b consumed=1 overconsumed=0 semicolon=1 match=2242/824
-        """)
-    check_matcher("amp;", """
-        61 consumed=1 overconsumed=1 semicolon=0 match=none
-        6d consumed=1 overconsumed=2 semicolon=0 match=none
-        70 consumed=1 overconsumed=0 semicolon=0 match=26/0
-        3b consumed=1 overconsumed=0 semicolon=1 match=26/0
-        """)
-    check_matcher("AMP", """
-        41 consumed=1 overconsumed=1 semicolon=0 match=none
-        4d consumed=1 overconsumed=2 semicolon=0 match=none
-        50 consumed=1 overconsumed=0 semicolon=0 match=26/0
-        """)
-    check_matcher("ampx;", """
-        61 consumed=1 overconsumed=1 semicolon=0 match=none
-        6d consumed=1 overconsumed=2 semicolon=0 match=none
-        70 consumed=1 overconsumed=0 semicolon=0 match=26/0
-        78 consumed=0 overconsumed=0 semicolon=0 match=26/0
-        3b consumed=1 overconsumed=0 semicolon=1 match=26/0
-        """)
-    check_matcher("zwnj;", """
-        7a consumed=1 overconsumed=1 semicolon=0 match=none
-        77 consumed=1 overconsumed=2 semicolon=0 match=none
-        6e consumed=1 overconsumed=3 semicolon=0 match=none
-        6a consumed=1 overconsumed=4 semicolon=0 match=none
-        3b consumed=1 overconsumed=0 semicolon=1 match=200c/0
-        """)
-    check_matcher("Zscr;", """
-        5a consumed=1 overconsumed=1 semicolon=0 match=none
-        73 consumed=1 overconsumed=2 semicolon=0 match=none
-        63 consumed=1 overconsumed=3 semicolon=0 match=none
-        72 consumed=1 overconsumed=4 semicolon=0 match=none
-        3b consumed=1 overconsumed=0 semicolon=1 match=1d4b5/0
-        """)
-    check_matcher("a", """
-        61 consumed=1 overconsumed=1 semicolon=0 match=none
-        """)
-    check_matcher("b", """
-        62 consumed=1 overconsumed=1 semicolon=0 match=none
-        """)
-    check_matcher("Z;", """
-        5a consumed=1 overconsumed=1 semicolon=0 match=none
-        3b consumed=0 overconsumed=1 semicolon=0 match=none
-        """)
-    check_matcher("nGt;", """
-        6e consumed=1 overconsumed=1 semicolon=0 match=none
-        47 consumed=1 overconsumed=2 semicolon=0 match=none
-        74 consumed=1 overconsumed=3 semicolon=0 match=none
-        3b consumed=1 overconsumed=0 semicolon=1 match=226b/8402
-        """)
-    check_matcher("acE;", """
-        61 consumed=1 overconsumed=1 semicolon=0 match=none
-        63 consumed=1 overconsumed=2 semicolon=0 match=none
-        45 consumed=1 overconsumed=3 semicolon=0 match=none
-        3b consumed=1 overconsumed=0 semicolon=1 match=223e/819
-        """)
-    check_matcher("ThickSpace;", """
-        54 consumed=1 overconsumed=1 semicolon=0 match=none
-        68 consumed=1 overconsumed=2 semicolon=0 match=none
-        69 consumed=1 overconsumed=3 semicolon=0 match=none
-        63 consumed=1 overconsumed=4 semicolon=0 match=none
-        6b consumed=1 overconsumed=5 semicolon=0 match=none
-        53 consumed=1 overconsumed=6 semicolon=0 match=none
-        70 consumed=1 overconsumed=7 semicolon=0 match=none
-        61 consumed=1 overconsumed=8 semicolon=0 match=none
-        63 consumed=1 overconsumed=9 semicolon=0 match=none
-        65 consumed=1 overconsumed=10 semicolon=0 match=none
-        3b consumed=1 overconsumed=0 semicolon=1 match=205f/8202
-        """)
-    check_matcher("fjlig;", """
-        66 consumed=1 overconsumed=1 semicolon=0 match=none
-        6a consumed=1 overconsumed=2 semicolon=0 match=none
-        6c consumed=1 overconsumed=3 semicolon=0 match=none
-        69 consumed=1 overconsumed=4 semicolon=0 match=none
-        67 consumed=1 overconsumed=5 semicolon=0 match=none
-        3b consumed=1 overconsumed=0 semicolon=1 match=66/106
-        """)
-
 test "the matcher, code point by code point":
-    with memory.heap: test_matcher_steps()
+    with memory.heap:
+        check_matcher("notindot;x", """
+            6e consumed=1 overconsumed=1 semicolon=0 match=none
+            6f consumed=1 overconsumed=2 semicolon=0 match=none
+            74 consumed=1 overconsumed=0 semicolon=0 match=ac/0
+            69 consumed=1 overconsumed=1 semicolon=0 match=ac/0
+            6e consumed=1 overconsumed=2 semicolon=0 match=ac/0
+            64 consumed=1 overconsumed=3 semicolon=0 match=ac/0
+            6f consumed=1 overconsumed=4 semicolon=0 match=ac/0
+            74 consumed=1 overconsumed=5 semicolon=0 match=ac/0
+            3b consumed=1 overconsumed=0 semicolon=1 match=22f5/824
+            78 consumed=0 overconsumed=0 semicolon=1 match=22f5/824
+            """)
+        check_matcher("1Aé&fjlig", """
+            31 consumed=0 overconsumed=0 semicolon=0 match=none
+            41 consumed=1 overconsumed=1 semicolon=0 match=none
+            e9 consumed=0 overconsumed=1 semicolon=0 match=none
+            26 consumed=0 overconsumed=1 semicolon=0 match=none
+            66 consumed=1 overconsumed=2 semicolon=0 match=none
+            6a consumed=0 overconsumed=2 semicolon=0 match=none
+            6c consumed=0 overconsumed=2 semicolon=0 match=none
+            69 consumed=0 overconsumed=2 semicolon=0 match=none
+            67 consumed=0 overconsumed=2 semicolon=0 match=none
+            """)
+        check_matcher("NotEqualTilde;", """
+            4e consumed=1 overconsumed=1 semicolon=0 match=none
+            6f consumed=1 overconsumed=2 semicolon=0 match=none
+            74 consumed=1 overconsumed=3 semicolon=0 match=none
+            45 consumed=1 overconsumed=4 semicolon=0 match=none
+            71 consumed=1 overconsumed=5 semicolon=0 match=none
+            75 consumed=1 overconsumed=6 semicolon=0 match=none
+            61 consumed=1 overconsumed=7 semicolon=0 match=none
+            6c consumed=1 overconsumed=8 semicolon=0 match=none
+            54 consumed=1 overconsumed=9 semicolon=0 match=none
+            69 consumed=1 overconsumed=10 semicolon=0 match=none
+            6c consumed=1 overconsumed=11 semicolon=0 match=none
+            64 consumed=1 overconsumed=12 semicolon=0 match=none
+            65 consumed=1 overconsumed=13 semicolon=0 match=none
+            3b consumed=1 overconsumed=0 semicolon=1 match=2242/824
+            """)
+        check_matcher("amp;", """
+            61 consumed=1 overconsumed=1 semicolon=0 match=none
+            6d consumed=1 overconsumed=2 semicolon=0 match=none
+            70 consumed=1 overconsumed=0 semicolon=0 match=26/0
+            3b consumed=1 overconsumed=0 semicolon=1 match=26/0
+            """)
+        check_matcher("AMP", """
+            41 consumed=1 overconsumed=1 semicolon=0 match=none
+            4d consumed=1 overconsumed=2 semicolon=0 match=none
+            50 consumed=1 overconsumed=0 semicolon=0 match=26/0
+            """)
+        check_matcher("ampx;", """
+            61 consumed=1 overconsumed=1 semicolon=0 match=none
+            6d consumed=1 overconsumed=2 semicolon=0 match=none
+            70 consumed=1 overconsumed=0 semicolon=0 match=26/0
+            78 consumed=0 overconsumed=0 semicolon=0 match=26/0
+            3b consumed=1 overconsumed=0 semicolon=1 match=26/0
+            """)
+        check_matcher("zwnj;", """
+            7a consumed=1 overconsumed=1 semicolon=0 match=none
+            77 consumed=1 overconsumed=2 semicolon=0 match=none
+            6e consumed=1 overconsumed=3 semicolon=0 match=none
+            6a consumed=1 overconsumed=4 semicolon=0 match=none
+            3b consumed=1 overconsumed=0 semicolon=1 match=200c/0
+            """)
+        check_matcher("Zscr;", """
+            5a consumed=1 overconsumed=1 semicolon=0 match=none
+            73 consumed=1 overconsumed=2 semicolon=0 match=none
+            63 consumed=1 overconsumed=3 semicolon=0 match=none
+            72 consumed=1 overconsumed=4 semicolon=0 match=none
+            3b consumed=1 overconsumed=0 semicolon=1 match=1d4b5/0
+            """)
+        check_matcher("a", """
+            61 consumed=1 overconsumed=1 semicolon=0 match=none
+            """)
+        check_matcher("b", """
+            62 consumed=1 overconsumed=1 semicolon=0 match=none
+            """)
+        check_matcher("Z;", """
+            5a consumed=1 overconsumed=1 semicolon=0 match=none
+            3b consumed=0 overconsumed=1 semicolon=0 match=none
+            """)
+        check_matcher("nGt;", """
+            6e consumed=1 overconsumed=1 semicolon=0 match=none
+            47 consumed=1 overconsumed=2 semicolon=0 match=none
+            74 consumed=1 overconsumed=3 semicolon=0 match=none
+            3b consumed=1 overconsumed=0 semicolon=1 match=226b/8402
+            """)
+        check_matcher("acE;", """
+            61 consumed=1 overconsumed=1 semicolon=0 match=none
+            63 consumed=1 overconsumed=2 semicolon=0 match=none
+            45 consumed=1 overconsumed=3 semicolon=0 match=none
+            3b consumed=1 overconsumed=0 semicolon=1 match=223e/819
+            """)
+        check_matcher("ThickSpace;", """
+            54 consumed=1 overconsumed=1 semicolon=0 match=none
+            68 consumed=1 overconsumed=2 semicolon=0 match=none
+            69 consumed=1 overconsumed=3 semicolon=0 match=none
+            63 consumed=1 overconsumed=4 semicolon=0 match=none
+            6b consumed=1 overconsumed=5 semicolon=0 match=none
+            53 consumed=1 overconsumed=6 semicolon=0 match=none
+            70 consumed=1 overconsumed=7 semicolon=0 match=none
+            61 consumed=1 overconsumed=8 semicolon=0 match=none
+            63 consumed=1 overconsumed=9 semicolon=0 match=none
+            65 consumed=1 overconsumed=10 semicolon=0 match=none
+            3b consumed=1 overconsumed=0 semicolon=1 match=205f/8202
+            """)
+        check_matcher("fjlig;", """
+            66 consumed=1 overconsumed=1 semicolon=0 match=none
+            6a consumed=1 overconsumed=2 semicolon=0 match=none
+            6c consumed=1 overconsumed=3 semicolon=0 match=none
+            69 consumed=1 overconsumed=4 semicolon=0 match=none
+            67 consumed=1 overconsumed=5 semicolon=0 match=none
+            3b consumed=1 overconsumed=0 semicolon=1 match=66/106
+            """)

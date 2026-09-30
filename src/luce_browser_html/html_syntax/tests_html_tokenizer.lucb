@@ -6,9 +6,8 @@
 #       Port of Tests/LibWeb/TestHTMLTokenizer.cpp (Ladybird 47c82b38d0, lines 1-277): all 16
 #       test cases. The regression case hashes the tokens of Tests/LibWeb/tokenizer-test.html,
 #       whose bytes are `tokenizer_test_html` below. The EXPECT_* macros are functions over a
-#       TokenCursor (BEGIN_ENUMERATION); each test body is a noinline function (# workaround:
-#       compiler-issues/ranges_facts_cubic) run under `with memory.heap` so that interned
-#       strings outlive the test's allocator.
+#       TokenCursor (BEGIN_ENUMERATION); each test body runs under `with memory.heap` so that
+#       interned strings outlive the test's allocator.
 #
 #==============================================================================================
 
@@ -123,196 +122,164 @@ func expect_tag_token_attribute_count(cursor: TokenCursor*, count: usize):
 
 # mark: TestHTMLTokenizer.cpp ===================================================================
 
-noinline func test_empty():
-    var tokens = run_tokenizer("")
-    var cursor = begin_enumeration(&tokens)
-    expect_end_of_file_token(&cursor)
-    end_enumeration(&cursor)
-
 test "empty":
-    with memory.heap: test_empty()
-
-noinline func test_basic():
-    var tokens = run_tokenizer("<html><head></head><body></body></html>")
-    var cursor = begin_enumeration(&tokens)
-    expect_start_tag_token(&cursor, "html", 1, 5)
-    expect_start_tag_token(&cursor, "head", 7, 11)
-    expect_end_tag_token(&cursor, "head", 14, 18)
-    expect_start_tag_token(&cursor, "body", 20, 24)
-    expect_end_tag_token(&cursor, "body", 27, 31)
-    expect_end_tag_token(&cursor, "html", 34, 38)
-    expect_end_of_file_token(&cursor)
-    end_enumeration(&cursor)
+    with memory.heap:
+        var tokens = run_tokenizer("")
+        var cursor = begin_enumeration(&tokens)
+        expect_end_of_file_token(&cursor)
+        end_enumeration(&cursor)
 
 test "basic":
-    with memory.heap: test_basic()
-
-noinline func test_basic_with_text():
-    var tokens = run_tokenizer("<p>This is some text.</p>")
-    var cursor = begin_enumeration(&tokens)
-    expect_start_tag_token(&cursor, "p", 1, 2)
-    expect_character_tokens(&cursor, "This is some text.")
-    expect_end_tag_token(&cursor, "p", 23, 24)
-    expect_end_of_file_token(&cursor)
-    end_enumeration(&cursor)
+    with memory.heap:
+        var tokens = run_tokenizer("<html><head></head><body></body></html>")
+        var cursor = begin_enumeration(&tokens)
+        expect_start_tag_token(&cursor, "html", 1, 5)
+        expect_start_tag_token(&cursor, "head", 7, 11)
+        expect_end_tag_token(&cursor, "head", 14, 18)
+        expect_start_tag_token(&cursor, "body", 20, 24)
+        expect_end_tag_token(&cursor, "body", 27, 31)
+        expect_end_tag_token(&cursor, "html", 34, 38)
+        expect_end_of_file_token(&cursor)
+        end_enumeration(&cursor)
 
 test "basic_with_text":
-    with memory.heap: test_basic_with_text()
-
-noinline func test_unquoted_attributes():
-    var tokens = run_tokenizer("<p foo=bar>")
-    var cursor = begin_enumeration(&tokens)
-    expect_start_tag_token(&cursor, "p", 1, 10)
-    expect_tag_token_attribute_count(&cursor, 1)
-    expect_tag_token_attribute(&cursor, "foo", "bar", 3, 6, 7, 10)
-    expect_end_of_file_token(&cursor)
-    end_enumeration(&cursor)
+    with memory.heap:
+        var tokens = run_tokenizer("<p>This is some text.</p>")
+        var cursor = begin_enumeration(&tokens)
+        expect_start_tag_token(&cursor, "p", 1, 2)
+        expect_character_tokens(&cursor, "This is some text.")
+        expect_end_tag_token(&cursor, "p", 23, 24)
+        expect_end_of_file_token(&cursor)
+        end_enumeration(&cursor)
 
 test "unquoted_attributes":
-    with memory.heap: test_unquoted_attributes()
-
-noinline func test_single_quoted_attributes():
-    var tokens = run_tokenizer("<p foo='bar'>")
-    var cursor = begin_enumeration(&tokens)
-    expect_start_tag_token(&cursor, "p", 1, 12)
-    expect_tag_token_attribute_count(&cursor, 1)
-    expect_tag_token_attribute(&cursor, "foo", "bar", 3, 6, 7, 12)
-    expect_end_of_file_token(&cursor)
-    end_enumeration(&cursor)
+    with memory.heap:
+        var tokens = run_tokenizer("<p foo=bar>")
+        var cursor = begin_enumeration(&tokens)
+        expect_start_tag_token(&cursor, "p", 1, 10)
+        expect_tag_token_attribute_count(&cursor, 1)
+        expect_tag_token_attribute(&cursor, "foo", "bar", 3, 6, 7, 10)
+        expect_end_of_file_token(&cursor)
+        end_enumeration(&cursor)
 
 test "single_quoted_attributes":
-    with memory.heap: test_single_quoted_attributes()
-
-noinline func test_double_quoted_attributes():
-    var tokens = run_tokenizer("<p foo=\"bar\">")
-    var cursor = begin_enumeration(&tokens)
-    expect_start_tag_token(&cursor, "p", 1, 12)
-    expect_tag_token_attribute_count(&cursor, 1)
-    expect_tag_token_attribute(&cursor, "foo", "bar", 3, 6, 7, 12)
-    expect_end_of_file_token(&cursor)
-    end_enumeration(&cursor)
+    with memory.heap:
+        var tokens = run_tokenizer("<p foo='bar'>")
+        var cursor = begin_enumeration(&tokens)
+        expect_start_tag_token(&cursor, "p", 1, 12)
+        expect_tag_token_attribute_count(&cursor, 1)
+        expect_tag_token_attribute(&cursor, "foo", "bar", 3, 6, 7, 12)
+        expect_end_of_file_token(&cursor)
+        end_enumeration(&cursor)
 
 test "double_quoted_attributes":
-    with memory.heap: test_double_quoted_attributes()
-
-noinline func test_valueless_attribute():
-    var tokens = run_tokenizer("<p foo>")
-    var cursor = begin_enumeration(&tokens)
-    expect_start_tag_token(&cursor, "p", 1, 6)
-    expect_tag_token_attribute_count(&cursor, 1)
-    expect_tag_token_attribute(&cursor, "foo", "", 3, 6, 0, 0)
-    expect_end_of_file_token(&cursor)
-    end_enumeration(&cursor)
+    with memory.heap:
+        var tokens = run_tokenizer("<p foo=\"bar\">")
+        var cursor = begin_enumeration(&tokens)
+        expect_start_tag_token(&cursor, "p", 1, 12)
+        expect_tag_token_attribute_count(&cursor, 1)
+        expect_tag_token_attribute(&cursor, "foo", "bar", 3, 6, 7, 12)
+        expect_end_of_file_token(&cursor)
+        end_enumeration(&cursor)
 
 test "valueless_attribute":
-    with memory.heap: test_valueless_attribute()
-
-noinline func test_multiple_attributes():
-    var tokens = run_tokenizer("<p foo=\"bar\" baz=foobar biz foo2=\"bar2\">")
-    var cursor = begin_enumeration(&tokens)
-    expect_start_tag_token(&cursor, "p", 1, 39)
-    expect_tag_token_attribute_count(&cursor, 4)
-    expect_tag_token_attribute(&cursor, "foo", "bar", 3, 6, 7, 12)
-    expect_tag_token_attribute(&cursor, "baz", "foobar", 13, 16, 17, 23)
-    expect_tag_token_attribute(&cursor, "biz", "", 24, 27, 0, 0)
-    expect_tag_token_attribute(&cursor, "foo2", "bar2", 28, 32, 33, 39)
-    expect_end_of_file_token(&cursor)
-    end_enumeration(&cursor)
+    with memory.heap:
+        var tokens = run_tokenizer("<p foo>")
+        var cursor = begin_enumeration(&tokens)
+        expect_start_tag_token(&cursor, "p", 1, 6)
+        expect_tag_token_attribute_count(&cursor, 1)
+        expect_tag_token_attribute(&cursor, "foo", "", 3, 6, 0, 0)
+        expect_end_of_file_token(&cursor)
+        end_enumeration(&cursor)
 
 test "multiple_attributes":
-    with memory.heap: test_multiple_attributes()
-
-noinline func test_character_reference_in_attribute():
-    var tokens = run_tokenizer("<p foo=a&amp;b bar='a&#38;b' baz=\"a&#x26;b\">")
-    var cursor = begin_enumeration(&tokens)
-    expect_start_tag_token(&cursor, "p", 1, 43)
-    expect_tag_token_attribute_count(&cursor, 3)
-    expect_tag_token_attribute(&cursor, "foo", "a&b", 3, 6, 7, 14)
-    expect_tag_token_attribute(&cursor, "bar", "a&b", 15, 18, 19, 28)
-    expect_tag_token_attribute(&cursor, "baz", "a&b", 29, 32, 33, 43)
-    expect_end_of_file_token(&cursor)
-    end_enumeration(&cursor)
+    with memory.heap:
+        var tokens = run_tokenizer("<p foo=\"bar\" baz=foobar biz foo2=\"bar2\">")
+        var cursor = begin_enumeration(&tokens)
+        expect_start_tag_token(&cursor, "p", 1, 39)
+        expect_tag_token_attribute_count(&cursor, 4)
+        expect_tag_token_attribute(&cursor, "foo", "bar", 3, 6, 7, 12)
+        expect_tag_token_attribute(&cursor, "baz", "foobar", 13, 16, 17, 23)
+        expect_tag_token_attribute(&cursor, "biz", "", 24, 27, 0, 0)
+        expect_tag_token_attribute(&cursor, "foo2", "bar2", 28, 32, 33, 39)
+        expect_end_of_file_token(&cursor)
+        end_enumeration(&cursor)
 
 test "character_reference_in_attribute":
-    with memory.heap: test_character_reference_in_attribute()
-
-noinline func test_named_character_reference():
-    var tokens = run_tokenizer("&notinvc;&notit;&cz")
-    var cursor = begin_enumeration(&tokens)
-    expect_character_token(&cursor, 0x22F6)  # &notinvc;
-    expect_character_token(&cursor, 0xAC)  # &not (backtracked from &notit)
-    expect_character_tokens(&cursor, "it")
-    expect_character_token(&cursor, (u32)';')
-    expect_character_tokens(&cursor, "&cz")  # invalid
-    expect_end_of_file_token(&cursor)
-    end_enumeration(&cursor)
+    with memory.heap:
+        var tokens = run_tokenizer("<p foo=a&amp;b bar='a&#38;b' baz=\"a&#x26;b\">")
+        var cursor = begin_enumeration(&tokens)
+        expect_start_tag_token(&cursor, "p", 1, 43)
+        expect_tag_token_attribute_count(&cursor, 3)
+        expect_tag_token_attribute(&cursor, "foo", "a&b", 3, 6, 7, 14)
+        expect_tag_token_attribute(&cursor, "bar", "a&b", 15, 18, 19, 28)
+        expect_tag_token_attribute(&cursor, "baz", "a&b", 29, 32, 33, 43)
+        expect_end_of_file_token(&cursor)
+        end_enumeration(&cursor)
 
 test "named_character_reference":
-    with memory.heap: test_named_character_reference()
-
-noinline func test_numeric_character_reference():
-    var tokens = run_tokenizer("&#1111")
-    var cursor = begin_enumeration(&tokens)
-    expect_character_token(&cursor, 1111)
-    expect_end_of_file_token(&cursor)
-    end_enumeration(&cursor)
+    with memory.heap:
+        var tokens = run_tokenizer("&notinvc;&notit;&cz")
+        var cursor = begin_enumeration(&tokens)
+        expect_character_token(&cursor, 0x22F6)  # &notinvc;
+        expect_character_token(&cursor, 0xAC)  # &not (backtracked from &notit)
+        expect_character_tokens(&cursor, "it")
+        expect_character_token(&cursor, (u32)';')
+        expect_character_tokens(&cursor, "&cz")  # invalid
+        expect_end_of_file_token(&cursor)
+        end_enumeration(&cursor)
 
 test "numeric_character_reference":
-    with memory.heap: test_numeric_character_reference()
-
-noinline func test_hex_character_reference():
-    var tokens = run_tokenizer("&#xA12bZ")
-    var cursor = begin_enumeration(&tokens)
-    expect_character_token(&cursor, 0xA12B)
-    expect_character_token(&cursor, (u32)'Z')
-    expect_end_of_file_token(&cursor)
-    end_enumeration(&cursor)
+    with memory.heap:
+        var tokens = run_tokenizer("&#1111")
+        var cursor = begin_enumeration(&tokens)
+        expect_character_token(&cursor, 1111)
+        expect_end_of_file_token(&cursor)
+        end_enumeration(&cursor)
 
 test "hex_character_reference":
-    with memory.heap: test_hex_character_reference()
-
-noinline func test_comment():
-    var tokens = run_tokenizer("<p><!-- This is a comment --></p>")
-    var cursor = begin_enumeration(&tokens)
-    expect_start_tag_token(&cursor, "p", 1, 2)
-    expect_comment_token(&cursor)
-    expect_end_tag_token(&cursor, "p", 31, 32)
-    expect_end_of_file_token(&cursor)
-    end_enumeration(&cursor)
+    with memory.heap:
+        var tokens = run_tokenizer("&#xA12bZ")
+        var cursor = begin_enumeration(&tokens)
+        expect_character_token(&cursor, 0xA12B)
+        expect_character_token(&cursor, (u32)'Z')
+        expect_end_of_file_token(&cursor)
+        end_enumeration(&cursor)
 
 test "comment":
-    with memory.heap: test_comment()
-
-noinline func test_doctype():
-    var tokens = run_tokenizer("<!DOCTYPE html><html></html>")
-    var cursor = begin_enumeration(&tokens)
-    expect_doctype_token(&cursor)
-    expect_start_tag_token(&cursor, "html", 16, 20)
-    expect_end_tag_token(&cursor, "html", 23, 27)
+    with memory.heap:
+        var tokens = run_tokenizer("<p><!-- This is a comment --></p>")
+        var cursor = begin_enumeration(&tokens)
+        expect_start_tag_token(&cursor, "p", 1, 2)
+        expect_comment_token(&cursor)
+        expect_end_tag_token(&cursor, "p", 31, 32)
+        expect_end_of_file_token(&cursor)
+        end_enumeration(&cursor)
 
 test "doctype":
-    with memory.heap: test_doctype()
+    with memory.heap:
+        var tokens = run_tokenizer("<!DOCTYPE html><html></html>")
+        var cursor = begin_enumeration(&tokens)
+        expect_doctype_token(&cursor)
+        expect_start_tag_token(&cursor, "html", 16, 20)
+        expect_end_tag_token(&cursor, "html", 23, 27)
 
 # The bytes of Tests/LibWeb/tokenizer-test.html (594 bytes).
 let tokenizer_test_html: str = "<!DOCTYPE html>\n<html lang=\"en\">\n<head>\n    <meta charset=\"UTF-8\">\n    <title>This is a test page :^)</title>\n    <script>\n        let foo = 2;\n        var bar = 3;\n        if (foo < bar)\n            alert(\"Check happens with HTML special <characters>.\");\n        let regex = /</g;\n    </script>\n</head>\n<body>\n    <p>This is the first paragraph.</p>\n    <p foo=\"bar\">The second paragraph has an attribute!</p>\n    <!-- This is a standard HTML comment. -->\n    <!----- This comment has a few too many dashes. ----->\n    <!----> <!-- <= There is an empty comment over there. -->\n</body>\n</html>\n"
 
-# NOTE: This relies on the format of HTMLToken::to_string() staying the same.
-#       If that changes, or something is added to the test HTML, the hash needs to be adjusted.
-noinline func test_regression():
-    assert(tokenizer_test_html.length == 594)
-    var tokens = run_tokenizer(tokenizer_test_html)
-    let tokens_hash = hash_tokens(&tokens)
-    assert(tokens_hash == 3657343287)
-
 test "regression":
-    with memory.heap: test_regression()
-
-noinline func test_ambiguous_ampersand_offset():
-    var tokens = run_tokenizer("&a")
-    let token = ak.vector_first(&tokens)
-    assert(html_token_type(token) == HtmlTokenType.character)
-    assert(html_token_start_position(token).line == 0)
-    assert(html_token_start_position(token).column == 1)
+    with memory.heap:
+        # NOTE: This relies on the format of HTMLToken::to_string() staying the same.
+        #       If that changes, or something is added to the test HTML, the hash needs to be adjusted.
+        assert(tokenizer_test_html.length == 594)
+        var tokens = run_tokenizer(tokenizer_test_html)
+        let tokens_hash = hash_tokens(&tokens)
+        assert(tokens_hash == 3657343287)
 
 test "ambiguous_ampersand_offset":
-    with memory.heap: test_ambiguous_ampersand_offset()
+    with memory.heap:
+        var tokens = run_tokenizer("&a")
+        let token = ak.vector_first(&tokens)
+        assert(html_token_type(token) == HtmlTokenType.character)
+        assert(html_token_start_position(token).line == 0)
+        assert(html_token_start_position(token).column == 1)
