@@ -13,9 +13,9 @@
 #
 #==============================================================================================
 
-import ak
-import gc
-import text_codec
+import luce_browser_foundation.ak
+import luce_browser_foundation.gc
+import luce_browser_foundation.text_codec
 import luce
 import memory
 from io import Location

@@ -23,13 +23,13 @@ check() {
 }
 
 for module in html_syntax; do
-    check "src/luce_browser_html/$module"
+    check "src/$module"
 done
 
 # Unit tests (TestHTMLTokenizer.cpp and cases pinned to the donor), module by module.
 for module in html_syntax; do
-    echo "== luce-base test src/luce_browser_html/$module"
-    luce-base test "src/luce_browser_html/$module"
+    echo "== luce-base test src/$module"
+    luce-base test "src/$module"
 done
 
 echo "== tools/gen_entities: regenerate the named character reference tables and compare"
@@ -39,5 +39,5 @@ generated=$(mktemp -d)
 trap 'rm -rf "$generated"' EXIT
 build/gen_entities data "$generated"
 for file in "$generated"/*.lucb; do
-    cmp "$file" "src/luce_browser_html/html_syntax/$(basename "$file")"
+    cmp "$file" "src/html_syntax/$(basename "$file")"
 done

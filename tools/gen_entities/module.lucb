@@ -17,7 +17,7 @@
 #       types_generated_named_character_references.lucb and entities.lucb.
 #
 #       Usage: gen_entities DATA_DIRECTORY OUTPUT_DIRECTORY, e.g. gen_entities data
-#       src/luce_browser_html/html_syntax. test.sh regenerates into a temporary directory and
+#       src/html_syntax. test.sh regenerates into a temporary directory and
 #       compares with the committed fragment.
 #
 #       Copyright (c) 2024, the SerenityOS developers.
@@ -28,7 +28,7 @@
 #==============================================================================================
 
 import c
-import files
+import luce_std.files
 import strings
 
 ## Entities.json is not what the generator expects.
