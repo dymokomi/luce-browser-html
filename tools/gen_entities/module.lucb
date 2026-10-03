@@ -28,7 +28,7 @@
 #==============================================================================================
 
 import c
-import luce_std.files
+from luce_std import files
 import strings
 
 ## Entities.json is not what the generator expects.
