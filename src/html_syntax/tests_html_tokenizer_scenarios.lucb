@@ -38,7 +38,7 @@ func scenario_show(builder: ak.StringBuilder*, tokenizer: HtmlTokenizer*):
     ak.string_builder_append(builder, "unparsed=")
     dump_escaped_string(builder, html_tokenizer_unparsed_input(tokenizer))
     var buffer: u8[128]
-    ak.string_builder_append(builder, format(buffer, f" defined={(i32)html_tokenizer_is_insertion_point_defined(tokenizer)} reached={(i32)html_tokenizer_is_insertion_point_reached(tokenizer)} closed={(i32)html_tokenizer_is_input_stream_closed(tokenizer)} eof_inserted={(i32)html_tokenizer_is_eof_inserted(tokenizer)} blocked={(i32)html_tokenizer_is_blocked(tokenizer)}\n") else trap("format"))
+    ak.string_builder_append(builder, strings.format(buffer, f" defined={(i32)html_tokenizer_is_insertion_point_defined(tokenizer)} reached={(i32)html_tokenizer_is_insertion_point_reached(tokenizer)} closed={(i32)html_tokenizer_is_input_stream_closed(tokenizer)} eof_inserted={(i32)html_tokenizer_is_eof_inserted(tokenizer)} blocked={(i32)html_tokenizer_is_blocked(tokenizer)}\n") else trap("format"))
 
 func check_scenario(builder: ak.StringBuilder*, expected: str):
     let actual = ak.string_builder_string_view(builder)

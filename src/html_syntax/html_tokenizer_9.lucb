@@ -225,7 +225,7 @@ pub func html_tokenizer_construct_string_view(this: HtmlTokenizer*, input: ak.St
     var it = ak.utf8_view_begin(&code_points)
     while not ak.utf8_code_point_iterator_done(&it):
         ak.vector_append_t(&this.m_decoded_input, ak.utf8_code_point_iterator_deref(&it))
-        discard(ak.utf8_code_point_iterator_inc(&it))
+        _ = ak.utf8_code_point_iterator_inc(&it)
     this.m_current_offset = 0
     this.m_prev_offset = 0
     ak.vector_append_t(&this.m_source_positions, HtmlTokenPosition(line = 0, column = 0))
@@ -255,7 +255,7 @@ pub func html_tokenizer_append_to_input_stream(this: HtmlTokenizer*, input: ak.S
     var it = ak.utf8_view_begin(&view)
     while not ak.utf8_code_point_iterator_done(&it):
         ak.vector_append_t(&this.m_decoded_input, ak.utf8_code_point_iterator_deref(&it))
-        discard(ak.utf8_code_point_iterator_inc(&it))
+        _ = ak.utf8_code_point_iterator_inc(&it)
 
 ## Ported from Libraries/LibWeb/HTML/Parser/HTMLTokenizer.cpp:2965 Web::HTML::HTMLTokenizer::close_input_stream.
 pub func html_tokenizer_close_input_stream(this: HtmlTokenizer*):
@@ -277,7 +277,7 @@ pub func html_tokenizer_insert_input_at_insertion_point(this: HtmlTokenizer*, in
     while not ak.utf8_code_point_iterator_done(&it):
         ak.vector_append_t(&new_decoded_input, ak.utf8_code_point_iterator_deref(&it))
         code_points_inserted += 1
-        discard(ak.utf8_code_point_iterator_inc(&it))
+        _ = ak.utf8_code_point_iterator_inc(&it)
 
     let after = ak.vector_span(&this.m_decoded_input)[(usize)insertion_point..]
     ak.vector_append_opaque(&new_decoded_input, after.data, after.length)
@@ -343,9 +343,9 @@ pub func html_tokenizer_restore_to(this: HtmlTokenizer*, new_iterator: isize):
     let diff = this.m_current_offset - new_iterator
     if diff > 0:
         for i in 0..<diff:
-            discard(i)
+            _ = i
             if not ak.vector_is_empty(&this.m_source_positions):
-                discard(ak.vector_take_last(&this.m_source_positions))
+                _ = ak.vector_take_last(&this.m_source_positions)
     else:
         # Going forwards...?
         trap("TODO")

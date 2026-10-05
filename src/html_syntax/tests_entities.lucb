@@ -77,11 +77,11 @@ func check_matcher(word: str, expected: str):
         let c_ = (u32)character
         let consumed = named_character_reference_matcher_try_consume_code_point(&matcher, c_)
         append_hex(&builder, c_)
-        ak.string_builder_append(&builder, format(buffer, f" consumed={(i32)consumed} overconsumed={named_character_reference_matcher_overconsumed_code_points(&matcher)} semicolon={(i32)named_character_reference_matcher_last_match_ends_with_semicolon(&matcher)} match=") else trap("format"))
+        ak.string_builder_append(&builder, strings.format(buffer, f" consumed={(i32)consumed} overconsumed={named_character_reference_matcher_overconsumed_code_points(&matcher)} semicolon={(i32)named_character_reference_matcher_last_match_ends_with_semicolon(&matcher)} match=") else trap("format"))
         if let codepoints = named_character_reference_matcher_code_points(&matcher):
             append_hex(&builder, codepoints.first)
             let second = named_character_reference_second_codepoint_value(codepoints.second) else 0
-            ak.string_builder_append(&builder, format(buffer, f"/{second}") else trap("format"))
+            ak.string_builder_append(&builder, strings.format(buffer, f"/{second}") else trap("format"))
         else:
             ak.string_builder_append(&builder, "none")
         ak.string_builder_append(&builder, "\n")

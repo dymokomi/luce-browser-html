@@ -38,7 +38,7 @@ func dump_escaped_fly_string(builder: ak.StringBuilder*, string: ak.FlyString):
 # appendff("{}:{}", position.line, position.column)
 func dump_position(builder: ak.StringBuilder*, position: HtmlTokenPosition):
     var buffer: u8[48]
-    ak.string_builder_append(builder, format(buffer, f"{position.line}:{position.column}") else trap("format"))
+    ak.string_builder_append(builder, strings.format(buffer, f"{position.line}:{position.column}") else trap("format"))
 
 # appendff("U+{:04X}", code_point)
 func dump_code_point(builder: ak.StringBuilder*, code_point: u32):
@@ -98,7 +98,7 @@ func dump_token(builder: ak.StringBuilder*, token: HtmlToken*):
             ak.string_builder_append(builder, "StartTag " if html_token_is_start_tag(token) else "EndTag ")
             dump_escaped_fly_string(builder, html_token_tag_name(token))
             var buffer: u8[96]
-            ak.string_builder_append(builder, format(buffer, f" self_closing={(i32)html_token_is_self_closing(token)} dup={(i32)html_token_had_duplicate_attribute(token)} attributes={html_token_attribute_count(token)}") else trap("format"))
+            ak.string_builder_append(builder, strings.format(buffer, f" self_closing={(i32)html_token_is_self_closing(token)} dup={(i32)html_token_had_duplicate_attribute(token)} attributes={html_token_attribute_count(token)}") else trap("format"))
             html_token_for_each_attribute(token, ak.Function1[HtmlTokenAttribute*, ak.IterationDecision](call = dump_attribute, context = builder))
         .comment:
             ak.string_builder_append(builder, "Comment ")

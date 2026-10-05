@@ -18,6 +18,8 @@
 
 # mark: Construction ============================================================================
 
+import strings
+
 ## Ported from Libraries/LibWeb/HTML/Parser/HTMLToken.h:64 Web::HTML::HTMLToken::make_character.
 pub func html_token_make_character(code_point: u32) -> HtmlToken:
     var token: HtmlToken
@@ -315,7 +317,7 @@ pub func html_token_to_string(this: const HtmlToken*) -> ak.String:
         .invalid:
             trap("VERIFY_NOT_REACHED")
         _:
-            discard(0)
+            _ = 0
 
     if html_token_type(this) == HtmlTokenType.start_tag or html_token_type(this) == HtmlTokenType.end_tag:
         ak.string_builder_append(&builder, " { name: '")
@@ -345,10 +347,10 @@ pub func html_token_to_string(this: const HtmlToken*) -> ak.String:
     # builder.appendff("@{}:{}", ...): AK's "{}" of a size_t is its decimal digits.
     var buffer: u8[96]
     if html_token_type(this) == HtmlTokenType.character:
-        let text = format(buffer, f"@{this.m_start_position.line}:{this.m_start_position.column}") else trap("MUST: appendff")
+        let text = strings.format(buffer, f"@{this.m_start_position.line}:{this.m_start_position.column}") else trap("MUST: appendff")
         ak.string_builder_append(&builder, text)
     else:
-        let text = format(buffer, f"@{this.m_start_position.line}:{this.m_start_position.column}-{this.m_end_position.line}:{this.m_end_position.column}") else trap("MUST: appendff")
+        let text = strings.format(buffer, f"@{this.m_start_position.line}:{this.m_start_position.column}-{this.m_end_position.line}:{this.m_end_position.column}") else trap("MUST: appendff")
         ak.string_builder_append(&builder, text)
 
     return ak.string_builder_to_string(&builder) else trap("MUST: builder.to_string()")

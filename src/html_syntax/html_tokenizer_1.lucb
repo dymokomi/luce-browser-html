@@ -56,7 +56,7 @@ func html_tokenizer_move_current_token(this: HtmlTokenizer*) -> HtmlToken:
     match this.m_current_token.m_data:
         .html_token_doctype_data(_): this.m_current_token.m_data = .html_token_doctype_data(value = none)
         .vector_html_token_attribute(_): this.m_current_token.m_data = .vector_html_token_attribute(value = none)
-        _: discard(0)
+        _: _ = 0
     return token
 
 # SWITCH_TO(new_state)
@@ -286,7 +286,7 @@ pub func html_tokenizer_skip(this: HtmlTokenizer*, count: usize):
     if not ak.vector_is_empty(&this.m_source_positions):
         ak.vector_append_t(&this.m_source_positions, *ak.vector_last(&this.m_source_positions))
     for i in 0..<count:
-        discard(i)
+        _ = i
         this.m_prev_offset = this.m_current_offset
         let code_point = *ak.vector_at(&this.m_decoded_input, (usize)this.m_current_offset)
         if not ak.vector_is_empty(&this.m_source_positions):

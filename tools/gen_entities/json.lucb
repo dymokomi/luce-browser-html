@@ -21,7 +21,7 @@ struct JsonReader:
     var text: const u8[]
     var position: usize
 
-    mutating func skip_whitespace():
+    func skip_whitespace():
         while self.position < self.text.length:
             let byte = self.text[self.position]
             if byte != ' ' and byte != '\n' and byte != '\r' and byte != '\t':
@@ -29,20 +29,20 @@ struct JsonReader:
             self.position += 1
 
     ## The next byte after whitespace, not consumed; 0 at the end.
-    mutating func peek() -> u8:
+    func peek() -> u8:
         self.skip_whitespace()
         if self.position >= self.text.length:
             return 0
         return self.text[self.position]
 
-    mutating func expect(byte: u8) -> !:
+    func expect(byte: u8) -> !:
         if self.peek() != byte:
             error(invalid_entities, "Entities.json: unexpected character")
         self.position += 1
 
     ## A string without escapes other than \" \\ and \uXXXX, which are skipped over: a view of
     ## its bytes between the quotes.
-    mutating func string() -> str!:
+    func string() -> str!:
         try self.expect('"')
         let start = self.position
         while self.position < self.text.length and self.text[self.position] != '"':
@@ -55,7 +55,7 @@ struct JsonReader:
         self.position += 1
         return view
 
-    mutating func integer() -> u32!:
+    func integer() -> u32!:
         self.skip_whitespace()
         var value: u32 = 0
         var digits: usize = 0
@@ -98,7 +98,7 @@ func parse_entities(text: const u8[]) -> Entity[]!:
                     entity.codepoint_count += 1
                 try reader.expect(']')
             elif key == "characters":
-                discard(try reader.string())
+                _ = try reader.string()
             else:
                 error(invalid_entities, "Entities.json: unexpected member")
             members += 1

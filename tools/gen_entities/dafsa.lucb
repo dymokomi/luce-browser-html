@@ -105,7 +105,7 @@ struct DafsaBuilder:
 
 func dafsa_builder_create() -> DafsaBuilder!:
     return DafsaBuilder(root = try new Node, minimized_nodes = try new (Node*?)[minimized_table_size],
-                        unchecked_nodes = try alloc UncheckedNode[64], unchecked_count = 0, previous_word = "")
+                        unchecked_nodes = try new UncheckedNode[64] ---, unchecked_count = 0, previous_word = "")
 
 func dafsa_builder_insert(this: DafsaBuilder*, s: str) -> !:
     if not (s > this.previous_word):
@@ -235,8 +235,8 @@ func write_children_data(node: Node*, node_data: NodeData[], node_data_count: us
 ## The rows of g_named_character_reference_nodes after the unused node 0; the second layer's
 ## child indexes are left in the nodes.
 func write_node_data(dafsa_builder: DafsaBuilder*) -> NodeData[]!:
-    var queue = NodeQueue(nodes = try alloc Node*[1 << 16], length = 0, head = 0)
-    var node_data = try alloc NodeData[1 << 14]
+    var queue = NodeQueue(nodes = try new Node*[1 << 16] ---, length = 0, head = 0)
+    var node_data = try new NodeData[1 << 14] ---
     var node_data_count: usize = 0
 
     var first_available_index: usize = 1
@@ -248,7 +248,7 @@ func write_node_data(dafsa_builder: DafsaBuilder*) -> NodeData[]!:
     first_available_index = 1
     let second_layer_length = queue.length
     for i in 0..<second_layer_length:
-        discard(i)
+        _ = i
         let node = queue.nodes[queue.head]
         queue.head += 1
         first_available_index = try queue_children(node, &queue, first_available_index)

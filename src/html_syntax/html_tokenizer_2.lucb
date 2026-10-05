@@ -108,7 +108,7 @@ func html_tokenizer_markup_declaration_open_state(this: HtmlTokenizer*, current_
             return .returned(token = none)
         _:
             # ConsumeNextResult::NotConsumed: break;
-            discard(0)
+            _ = 0
 
     match html_tokenizer_consume_next_if_match(this, ak.sv("DOCTYPE"), stop_at_insertion_point, ak.CaseSensitivity.case_insensitive):
         .consumed:
@@ -117,7 +117,7 @@ func html_tokenizer_markup_declaration_open_state(this: HtmlTokenizer*, current_
             return .returned(token = none)
         _:
             # ConsumeNextResult::NotConsumed: break;
-            discard(0)
+            _ = 0
 
     match html_tokenizer_consume_next_if_match(this, ak.sv("[CDATA["), stop_at_insertion_point):
         .consumed:
@@ -135,7 +135,7 @@ func html_tokenizer_markup_declaration_open_state(this: HtmlTokenizer*, current_
             return .returned(token = none)
         _:
             # ConsumeNextResult::NotConsumed: break;
-            discard(0)
+            _ = 0
 
     log_parse_error()
     html_tokenizer_create_new_token(this, HtmlTokenType.comment)
@@ -247,7 +247,7 @@ func html_tokenizer_after_doctype_name_state(this: HtmlTokenizer*, current_input
                 return .returned(token = none)
             _:
                 # ConsumeNextResult::NotConsumed: break;
-                discard(0)
+                _ = 0
     if ak.to_ascii_uppercase(input_value(current_input_character)) == (u32)'S':
         match html_tokenizer_consume_next_if_match(this, ak.sv("YSTEM"), stop_at_insertion_point, ak.CaseSensitivity.case_insensitive):
             .consumed:
@@ -257,7 +257,7 @@ func html_tokenizer_after_doctype_name_state(this: HtmlTokenizer*, current_input
                 return .returned(token = none)
             _:
                 # ConsumeNextResult::NotConsumed: break;
-                discard(0)
+                _ = 0
     log_parse_error()
     html_token_ensure_doctype_data(&this.m_current_token).force_quirks = true
     return tokenizer_reconsume_in(this, .bogus_doctype)
