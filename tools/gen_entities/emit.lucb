@@ -25,7 +25,7 @@ func second_codepoint_case_name(codepoint: u32) -> str:
         _: return "none_"
 
 ## `value` in uppercase hexadecimal without leading zeros (Python's `{:X}`).
-func put_hex(out: strings.Builder*, value: u64) -> !:
+func put_hex(out: collections.Buffer*, value: u64) -> !:
     var buffer: u8[16]
     var index: usize = 16
     var remaining = value
@@ -36,25 +36,25 @@ func put_hex(out: strings.Builder*, value: u64) -> !:
         remaining >>= 4
         if remaining == 0:
             break
-    try out.put((str)buffer[index..])
+    try out.put_text((str)buffer[index..])
 
 ## `value` in decimal.
-func put_decimal(out: strings.Builder*, value: u64) -> !:
+func put_decimal(out: collections.Buffer*, value: u64) -> !:
     var buffer: u8[32]
-    try out.put(try strings.format_u64(value, buffer))
+    try out.put_text(try strings.format_u64(value, buffer))
 
-func put_bool(out: strings.Builder*, value: bool) -> !:
-    try out.put("true" if value else "false")
+func put_bool(out: collections.Buffer*, value: bool) -> !:
+    try out.put_text("true" if value else "false")
 
 ## The two `##` doc lines and the opening of a table.
-func put_table_start(out: strings.Builder*, doc: str, declaration: str, type_name: str, length: usize) -> !:
-    try out.put(doc)
-    try out.put(declaration)
-    try out.put(": ")
-    try out.put(type_name)
-    try out.put("[")
+func put_table_start(out: collections.Buffer*, doc: str, declaration: str, type_name: str, length: usize) -> !:
+    try out.put_text(doc)
+    try out.put_text(declaration)
+    try out.put_text(": ")
+    try out.put_text(type_name)
+    try out.put_text("[")
     try put_decimal(out, (u64)length)
-    try out.put("] = [\n")
+    try out.put_text("] = [\n")
 
 # mark: The tables ==============================================================================
 
@@ -83,8 +83,8 @@ func emit_tables(entities: Entity[]) -> str!:
         index_to_first[array_index] = entity.codepoints[0]
         index_to_second[array_index] = entity.codepoints[1] if entity.codepoint_count == 2 else 0
 
-    var out = try strings.Builder.create(1 << 18)
-    try out.put("""
+    var out: collections.Buffer
+    try out.put_text("""
         #==============================================================================================
         #
         #   named_character_reference_tables - the generated named character reference tables
@@ -101,31 +101,31 @@ func emit_tables(entities: Entity[]) -> str!:
 
     try put_table_start(&out, "## Web::HTML::g_named_character_reference_codepoints_lookup: the code points of every named character\n## reference, at its unique index minus one.\n", "let g_named_character_reference_codepoints_lookup", "NamedCharacterReferenceCodepoints", entities.length)
     for i in 0..<entities.length:
-        try out.put("    NamedCharacterReferenceCodepoints(0x")
+        try out.put_text("    NamedCharacterReferenceCodepoints(0x")
         try put_hex(&out, (u64)index_to_first[i])
-        try out.put(", .")
-        try out.put(second_codepoint_case_name(index_to_second[i]))
-        try out.put("),\n")
-    try out.put("]\n\n")
+        try out.put_text(", .")
+        try out.put_text(second_codepoint_case_name(index_to_second[i]))
+        try out.put_text("),\n")
+    try out.put_text("]\n\n")
 
     let node_data = try write_node_data(&dafsa_builder)
 
     try put_table_start(&out, "## Web::HTML::g_named_character_reference_nodes: the DAFSA below the second layer; node 0 is\n## unused.\n", "pub let g_named_character_reference_nodes", "NamedCharacterReferenceNode", node_data.length + 1)
-    try out.put("    NamedCharacterReferenceNode(0, 0, false, 0, 0),\n")
+    try out.put_text("    NamedCharacterReferenceNode(0, 0, false, 0, 0),\n")
     for row in node_data:
-        try out.put("    NamedCharacterReferenceNode('")
+        try out.put_text("    NamedCharacterReferenceNode('")
         var character: u8[1] = [(u8)row.character]
-        try out.put((str)character[0..])
-        try out.put("', ")
+        try out.put_text((str)character[0..])
+        try out.put_text("', ")
         try put_decimal(&out, (u64)row.number)
-        try out.put(", ")
+        try out.put_text(", ")
         try put_bool(&out, row.end_of_word)
-        try out.put(", ")
+        try out.put_text(", ")
         try put_decimal(&out, (u64)row.child_index)
-        try out.put(", ")
+        try out.put_text(", ")
         try put_decimal(&out, (u64)row.children_len)
-        try out.put("),\n")
-    try out.put("]\n\n")
+        try out.put_text("),\n")
+    try out.put_text("]\n\n")
 
     let num_children = node_num_direct_children(dafsa_builder.root)
     # A-Z, a-z exactly
@@ -137,11 +137,11 @@ func emit_tables(entities: Entity[]) -> str!:
     for (c_, child) in dafsa_builder.root.children.indexed():
         let node = child else continue
         assert(is_ascii_alpha(c_))
-        try out.put("    NamedCharacterReferenceFirstLayerNode(")
+        try out.put_text("    NamedCharacterReferenceFirstLayerNode(")
         try put_decimal(&out, (u64)unique_index_tally)
-        try out.put("),\n")
+        try out.put_text("),\n")
         unique_index_tally += node.number
-    try out.put("]\n\n")
+    try out.put_text("]\n\n")
 
     try put_table_start(&out, "## Web::HTML::g_named_character_reference_first_to_second_layer: the second characters that\n## follow each first character, as a bit mask, and where they start in the second layer.\n", "pub let g_named_character_reference_first_to_second_layer", "NamedCharacterReferenceFirstToSecondLayerLink", 52)
     var second_layer_offset: usize = 0
@@ -149,13 +149,13 @@ func emit_tables(entities: Entity[]) -> str!:
         let node = child else continue
         assert(is_ascii_alpha(c_))
         let bit_mask = node_get_ascii_alphabetic_bit_mask(node)
-        try out.put("    NamedCharacterReferenceFirstToSecondLayerLink(")
+        try out.put_text("    NamedCharacterReferenceFirstToSecondLayerLink(")
         try put_decimal(&out, bit_mask)
-        try out.put(", ")
+        try out.put_text(", ")
         try put_decimal(&out, (u64)second_layer_offset)
-        try out.put("),\n")
+        try out.put_text("),\n")
         second_layer_offset += node_num_direct_children(node)
-    try out.put("]\n\n")
+    try out.put_text("]\n\n")
 
     try put_table_start(&out, "## Web::HTML::g_named_character_reference_second_layer: the second layer of the DAFSA, grouped by\n## first character.\n", "pub let g_named_character_reference_second_layer", "NamedCharacterReferenceSecondLayerNode", second_layer_offset)
     for (c_, child) in dafsa_builder.root.children.indexed():
@@ -168,15 +168,15 @@ func emit_tables(entities: Entity[]) -> str!:
             assert(is_ascii_alpha(child_c))
             let child_num_children = node_num_direct_children(second_layer_node)
             let child_index = second_layer_node.child_index else 0
-            try out.put("    NamedCharacterReferenceSecondLayerNode(")
+            try out.put_text("    NamedCharacterReferenceSecondLayerNode(")
             try put_decimal(&out, (u64)child_index)
-            try out.put(", ")
+            try out.put_text(", ")
             try put_decimal(&out, (u64)local_unique_index_tally)
-            try out.put(", ")
+            try out.put_text(", ")
             try put_decimal(&out, (u64)child_num_children)
-            try out.put(", ")
+            try out.put_text(", ")
             try put_bool(&out, second_layer_node.is_terminal)
-            try out.put("),\n")
+            try out.put_text("),\n")
             local_unique_index_tally += second_layer_node.number
-    try out.put("]\n")
-    return out.view()
+    try out.put_text("]\n")
+    return out.text()
