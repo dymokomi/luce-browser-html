@@ -1,7 +1,7 @@
 #prisma 4.0
 def package "luce-browser-html" {
     str owner = "dymokomi"
-    str version = "0.5.0"
+    str version = "0.5.1"
     str kind = "package"
     str language = "luce-base"
     str description = "The HTML tokenizer and named character references from Ladybird's LibWeb, in luce-base."
