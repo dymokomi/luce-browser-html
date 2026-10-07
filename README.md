@@ -29,9 +29,9 @@ The port follows Ladybird at `47c82b38d0` (see `PIN`).
 
 ## Testing
 
-`./test.sh` type-checks every module with warnings as errors, runs the unit tests (Ladybird's
-`TestHTMLTokenizer` and cases pinned to the donor's behaviour), and regenerates the tables to compare
-them with the committed ones.
+`luc test` runs the unit tests (Ladybird's `TestHTMLTokenizer` and cases pinned to the donor's
+behaviour) and `tests/generated`, which regenerates the tables to compare them with the committed
+ones. `tools/check.sh` is the lint: formatting and `-W`.
 
 ## License
 
